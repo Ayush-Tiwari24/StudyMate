@@ -233,11 +233,13 @@ async def ask_question(
 
         # Save assistant message
         from app.core.config import settings as app_settings
-        model_name = (
-            app_settings.openai_model
-            if app_settings.llm_provider == "openai"
-            else app_settings.ollama_model
-        )
+        if app_settings.llm_provider == "groq":
+            model_name = app_settings.groq_model
+        elif app_settings.llm_provider == "openai":
+            model_name = app_settings.openai_model
+        else:
+            model_name = app_settings.ollama_model
+
 
         assistant_msg = Message(
             chat_id=chat.id,

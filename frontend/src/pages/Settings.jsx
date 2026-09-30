@@ -10,8 +10,8 @@ export default function Settings() {
 
   const [settings, setSettingsState] = useState({
     theme: theme,
-    llm_provider: 'openai',
-    model_name: 'gpt-4o-mini',
+    llm_provider: 'groq',
+    model_name: 'openai/gpt-oss-120b',
     top_k: 5,
     font_scale: fontScale || 'medium',
   });
