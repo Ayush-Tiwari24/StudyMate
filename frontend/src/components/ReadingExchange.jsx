@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Bookmark, Copy, Check, RotateCw, ExternalLink } from 'lucide-react';
 import CitationChip from './CitationChip';
 import { useNotes } from '../context/NotesContext';
@@ -36,28 +38,14 @@ export default function ReadingExchange({
     }
   };
 
-  // Replace [1], [2], etc. with inline footnote superscripts
-  const renderAnswerText = (text, srcList = []) => {
-    if (!text) return null;
-
-    const parts = text.split(/(\[\d+\])/g);
-
-    return parts.map((part, i) => {
-      const match = part.match(/^\[(\d+)\]$/);
-      if (match) {
-        const index = parseInt(match[1], 10);
-        const source = srcList && srcList[index - 1];
-        return (
-          <CitationChip
-            key={i}
-            index={index}
-            source={source}
-            onClick={() => onOpenSources && onOpenSources(srcList, index)}
-          />
-        );
-      }
-      return <span key={i}>{part}</span>;
-    });
+  const formatText = (text) => {
+    if (!text) return '';
+    let formatted = text;
+    formatted = formatted.replace(/([^\n])\s+(\d+\.\s+\*\*)/g, '$1\n\n$2');
+    formatted = formatted.replace(/([^\n])\s+([•\-*]\s+\*\*)/g, '$1\n\n$2');
+    formatted = formatted.replace(/\]\s*(\d+\.\s+)/g, ']\n\n$1');
+    formatted = formatted.replace(/\[(\d+)\]/g, '[$1](#cite-$1)');
+    return formatted;
   };
 
   return (
@@ -67,8 +55,38 @@ export default function ReadingExchange({
 
       {/* Answer Card with textbook typography (Newsreader serif) */}
       <div className="desk-answer-card">
-        <div className="desk-prose-answer">
-          {renderAnswerText(answer, sources)}
+        <div className="desk-prose-answer prose-answer">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              a: ({ href, children }) => {
+                if (href && href.startsWith('#cite-')) {
+                  const index = parseInt(href.replace('#cite-', ''), 10);
+                  const source = sources && sources[index - 1];
+                  return (
+                    <CitationChip
+                      key={href}
+                      index={index}
+                      source={source}
+                      onClick={() => onOpenSources && onOpenSources(sources, index)}
+                    />
+                  );
+                }
+                return (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--accent)] underline hover:text-[var(--accent-hover)]"
+                  >
+                    {children}
+                  </a>
+                );
+              },
+            }}
+          >
+            {formatText(answer)}
+          </ReactMarkdown>
         </div>
 
         {/* Footnotes Section: ¹ DBMS_Unit3 p.14 (Section 4) */}

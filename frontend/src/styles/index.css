@@ -113,47 +113,132 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 /* Textbook prose answers */
-.prose-answer {
+.prose-answer, .desk-prose-answer {
   font-family: var(--font-serif);
   font-size: var(--answer-font-size);
   line-height: var(--answer-line-height);
   color: var(--ink);
   letter-spacing: -0.005em;
+  word-break: break-word;
 }
 
-.prose-answer p {
-  margin-bottom: 0.85rem;
+.prose-answer p, .desk-prose-answer p {
+  margin-bottom: 1.15rem;
+  line-height: 1.8;
 }
-.prose-answer p:last-child {
+
+.prose-answer p:last-child, .desk-prose-answer p:last-child {
   margin-bottom: 0;
 }
-.prose-answer strong {
+
+.prose-answer strong, .desk-prose-answer strong {
   font-weight: 600;
   color: var(--ink);
 }
-.prose-answer ul, .prose-answer ol {
-  margin: 0.5rem 0 0.85rem 1.25rem;
+
+.prose-answer h1, .prose-answer h2, .prose-answer h3, .prose-answer h4,
+.desk-prose-answer h1, .desk-prose-answer h2, .desk-prose-answer h3, .desk-prose-answer h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--ink);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
-.prose-answer li {
-  margin-bottom: 0.35rem;
+
+.prose-answer h1, .desk-prose-answer h1 { font-size: 1.35rem; }
+.prose-answer h2, .desk-prose-answer h2 { 
+  font-size: 1.2rem; 
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--line-subtle);
 }
-.prose-answer code {
+.prose-answer h3, .desk-prose-answer h3 { font-size: 1.1rem; }
+.prose-answer h4, .desk-prose-answer h4 { font-size: 1.0rem; }
+
+.prose-answer ul, .desk-prose-answer ul {
+  list-style-type: disc;
+  padding-left: 1.6rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.prose-answer ol, .desk-prose-answer ol {
+  list-style-type: decimal;
+  padding-left: 1.6rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.prose-answer li, .desk-prose-answer li {
+  margin-bottom: 0.6rem;
+  line-height: 1.75;
+  padding-left: 0.25rem;
+}
+
+.prose-answer li::marker, .desk-prose-answer li::marker {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.prose-answer table, .desk-prose-answer table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 0.925rem;
+}
+
+.prose-answer th, .desk-prose-answer th {
+  background-color: var(--surface-muted);
+  border: 1px solid var(--line);
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+.prose-answer td, .desk-prose-answer td {
+  border: 1px solid var(--line);
+  padding: 0.55rem 0.85rem;
+  color: var(--ink);
+}
+
+.prose-answer tr:nth-child(even) td, .desk-prose-answer tr:nth-child(even) td {
+  background-color: var(--surface-muted);
+}
+
+.prose-answer blockquote, .desk-prose-answer blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  margin: 1.15rem 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.prose-answer hr, .desk-prose-answer hr {
+  border: none;
+  border-top: 1px solid var(--line-subtle);
+  margin: 1.5rem 0;
+}
+
+.prose-answer code, .desk-prose-answer code {
   font-family: var(--font-mono);
   font-size: 0.85em;
   background-color: var(--surface-muted);
-  padding: 0.1rem 0.35rem;
+  padding: 0.15rem 0.4rem;
   border-radius: 4px;
   border: 1px solid var(--line);
 }
-.prose-answer pre {
+
+.prose-answer pre, .desk-prose-answer pre {
   font-family: var(--font-mono);
   font-size: 0.85em;
   background-color: var(--surface-muted);
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.15rem;
   border-radius: 6px;
   border: 1px solid var(--line);
   overflow-x: auto;
-  margin: 0.75rem 0;
+  margin: 1rem 0;
+  line-height: 1.6;
 }
 
 /* Source Highlight Marker */

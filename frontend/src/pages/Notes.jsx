@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useNotes } from '../context/NotesContext';
-import { Download, Trash2, Bookmark } from 'lucide-react';
+import { Download, Trash2, Bookmark, Copy, Check, FileText, Calendar, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Notes() {
   const { savedNotes, removeNote } = useNotes();
   const [selectedDocFilter, setSelectedDocFilter] = useState('all');
+  const [copiedId, setCopiedId] = useState(null);
   const navigate = useNavigate();
 
   // Extract unique document names
@@ -17,6 +20,29 @@ export default function Notes() {
     selectedDocFilter === 'all'
       ? savedNotes
       : savedNotes.filter((n) => n.document_name === selectedDocFilter);
+
+  // Copy note question and answer to clipboard
+  const handleCopyNote = (note) => {
+    const text = `${note.question}\n\n${note.answer}`;
+    navigator.clipboard.writeText(text);
+    setCopiedId(note.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Pre-process note text to break crowded list items and format citations
+  const formatNoteText = (text) => {
+    if (!text) return '';
+    let formatted = text;
+    // Break numbered list items running together onto separate lines
+    formatted = formatted.replace(/([^\n])\s+(\d+\.\s+\*\*)/g, '$1\n\n$2');
+    // Break bullet points running together
+    formatted = formatted.replace(/([^\n])\s+([•\-*]\s+\*\*)/g, '$1\n\n$2');
+    // Break sentences followed by numbered items like "... [5] 8. **Stable..."
+    formatted = formatted.replace(/\]\s*(\d+\.\s+)/g, ']\n\n$1');
+    // Format citation tags into markdown links
+    formatted = formatted.replace(/\[(\d+)\]/g, '[$1](#cite-$1)');
+    return formatted;
+  };
 
   // Export to Markdown file
   const handleExportMarkdown = () => {
@@ -114,52 +140,117 @@ export default function Notes() {
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             {filteredNotes.map((note) => (
               <div
                 key={note.id}
-                className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-6 shadow-sm flex flex-col gap-4"
+                className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-6 sm:p-8 shadow-sm flex flex-col gap-5 hover:border-[var(--line-subtle)] transition-all"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <h3 className="font-sans text-base font-semibold text-[var(--ink)] leading-snug">
-                    {note.question}
-                  </h3>
+                {/* Note Header */}
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
+                  <div className="flex flex-col gap-1.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--muted)] font-mono">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--surface-muted)] border border-[var(--line-subtle)] text-[var(--ink)] font-medium">
+                        <FileText size={11} className="text-[var(--accent)]" />
+                        {note.document_name || 'Document'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[var(--subtle)]">
+                        <Calendar size={11} />
+                        {note.savedAt ? new Date(note.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Saved note'}
+                      </span>
+                    </div>
+                    <h3 className="font-sans text-lg sm:text-xl font-semibold text-[var(--ink)] tracking-tight leading-snug mt-1">
+                      {note.question}
+                    </h3>
+                  </div>
 
-                  <button
-                    onClick={() => removeNote(note.id)}
-                    className="p-1 rounded text-[var(--muted)] hover:text-[var(--status-failed)] hover:bg-[var(--surface-muted)] transition-colors flex-shrink-0"
-                    title="Remove note"
+                  {/* Actions: Copy and Delete */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-start">
+                    <button
+                      onClick={() => handleCopyNote(note)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[6px] border border-[var(--line)] bg-[var(--surface-muted)] hover:bg-[var(--surface-hover)] text-xs font-sans text-[var(--ink)] transition-colors"
+                      title="Copy question and answer"
+                    >
+                      {copiedId === note.id ? (
+                        <>
+                          <Check size={12} className="text-emerald-500" />
+                          <span className="text-emerald-500 font-medium">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} className="text-[var(--muted)]" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => removeNote(note.id)}
+                      className="p-1.5 rounded-[6px] border border-transparent hover:border-[var(--line)] hover:bg-[var(--surface-hover)] text-[var(--muted)] hover:text-rose-500 transition-colors"
+                      title="Remove note"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Markdown Answer */}
+                <div className="prose-answer text-[15px] sm:text-base leading-relaxed text-[var(--ink)]">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ href, children }) => {
+                        if (href && href.startsWith('#cite-')) {
+                          const index = parseInt(href.replace('#cite-', ''), 10);
+                          return (
+                            <span
+                              className="inline-flex items-center justify-center font-mono text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-subtle)] px-1.5 py-0.5 rounded mx-0.5 border border-[var(--accent-subtle)] select-none align-baseline"
+                              title={`Source [${index}]`}
+                            >
+                              [{index}]
+                            </span>
+                          );
+                        }
+                        return (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[var(--accent)] underline hover:text-[var(--accent-hover)]"
+                          >
+                            {children}
+                          </a>
+                        );
+                      },
+                    }}
                   >
-                    <Trash2 size={13} />
-                  </button>
+                    {formatNoteText(note.answer)}
+                  </ReactMarkdown>
                 </div>
 
-                <div className="prose-answer text-sm">
-                  <p>{note.answer}</p>
-                </div>
-
+                {/* Citations Footer */}
                 {note.sources && note.sources.length > 0 && (
-                  <div className="pt-3 border-t border-[var(--line-subtle)] flex flex-col gap-1.5">
+                  <div className="pt-4 border-t border-[var(--line-subtle)] flex flex-col gap-2">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] font-semibold">
-                      Citations
+                      Source Citations
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {note.sources.map((src, i) => (
                         <span
                           key={i}
-                          className="font-mono text-[11px] text-[var(--muted)] bg-[var(--surface-muted)] px-2 py-0.5 rounded border border-[var(--line-subtle)]"
+                          className="font-mono text-xs text-[var(--ink)] bg-[var(--surface-muted)] px-2.5 py-1 rounded-[6px] border border-[var(--line)] flex items-center gap-1.5"
                         >
-                          [{i + 1}] {src.file || src.filename} {src.page ? `· p.${src.page}` : ''}
+                          <span className="font-semibold text-[var(--accent)]">[{i + 1}]</span>
+                          <span className="truncate max-w-[200px]">{src.file || src.filename}</span>
+                          {src.page && (
+                            <span className="text-[var(--muted)] border-l border-[var(--line)] pl-1.5">
+                              p.{src.page}
+                            </span>
+                          )}
                         </span>
                       ))}
                     </div>
                   </div>
                 )}
-
-                <div className="flex items-center justify-between text-[11px] text-[var(--subtle)] pt-2 border-t border-[var(--line-subtle)] font-mono">
-                  <span>Saved on {new Date(note.savedAt).toLocaleDateString()}</span>
-                  <span>{note.document_name}</span>
-                </div>
               </div>
             ))}
           </div>
@@ -168,3 +259,4 @@ export default function Notes() {
     </div>
   );
 }
+
