@@ -28,19 +28,28 @@ export function useDocuments() {
     }
   }, []);
 
-  // Polling logic for documents in progress
+  const documentsRef = useRef(documents);
+  useEffect(() => {
+    documentsRef.current = documents;
+  }, [documents]);
+
+  // Initial fetch on mount
   useEffect(() => {
     fetchDocs();
+  }, [fetchDocs]);
 
+  // Polling logic for documents in progress
+  useEffect(() => {
     const checkPendingStatus = async () => {
-      const pendingDocs = documents.filter(
+      const currentDocs = documentsRef.current || [];
+      const pendingDocs = currentDocs.filter(
         (d) => d.status === 'uploaded' || d.status === 'processing'
       );
 
       if (pendingDocs.length === 0) return;
 
       let changed = false;
-      const updatedList = [...documents];
+      const updatedList = [...currentDocs];
 
       for (const doc of pendingDocs) {
         try {
@@ -69,12 +78,12 @@ export function useDocuments() {
       }
     };
 
-    pollTimerRef.current = setInterval(checkPendingStatus, 2500);
+    pollTimerRef.current = setInterval(checkPendingStatus, 3000);
 
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
-  }, [documents, fetchDocs]);
+  }, []);
 
   const upload = async (file, onProgress) => {
     const res = await apiUpload(file, onProgress);

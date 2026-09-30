@@ -59,15 +59,32 @@ async def rag_query(
         recent_msgs.reverse()  # Chronological order
         history = [{"role": m.role, "content": m.content} for m in recent_msgs]
 
-    # ── Step 2: Rewrite follow-up questions ────────────────────
+    # ── Step 2: Rewrite follow-up questions / Expand broad queries ──
+    doc_titles = []
+    if db and document_ids:
+        try:
+            from app.models.document import Document
+            docs = db.query(Document).filter(Document.id.in_(document_ids)).all()
+            doc_titles = [d.filename.replace('.pdf', '').strip() for d in docs]
+        except Exception as e:
+            logger.warning(f"Could not load document titles: {e}")
+
     standalone_question = question
-    if history and len(history) >= 2:
+    is_broad_query = any(k in question.lower() for k in [
+        "this material", "these notes", "this document", "these documents",
+        "study quiz", "generate a quiz", "summarize", "summary", "overview",
+        "core topics", "key concepts", "primary definitions"
+    ])
+
+    if (history and len(history) >= 2) or (is_broad_query and doc_titles):
         try:
             rewrite_llm = get_llm_for_rewrite()
-            rewrite_prompt = build_rewrite_prompt(history, question)
+            rewrite_prompt = build_rewrite_prompt(history, question, doc_titles=doc_titles)
             response = rewrite_llm.invoke(rewrite_prompt)
-            standalone_question = response.content.strip()
-            logger.info(f"Rewritten question: {standalone_question}")
+            candidate = response.content.strip().strip('"')
+            if candidate and len(candidate) > 5:
+                standalone_question = candidate
+                logger.info(f"Optimized retrieval query: {standalone_question}")
         except Exception as e:
             logger.warning(f"Question rewrite failed, using original: {e}")
             standalone_question = question
@@ -85,6 +102,15 @@ async def rag_query(
         yield {"type": "token", "text": NOT_FOUND_MESSAGE}
         yield {"type": "sources", "sources": []}
         return
+
+    # Filter out promotional/advertisement cover pages if other chunks exist
+    def is_promo(text: str) -> bool:
+        t = text.lower().replace(" ", "").replace("\n", "")
+        return any(sig in t for sig in ["gatewayclasses", "paidcourses", "recordedvideolecture", "linkindescription"])
+
+    non_promo = [c for c in chunks if not is_promo(c["content"])]
+    if non_promo:
+        chunks = non_promo
 
     # ── Step 5: Rerank (optional) ──────────────────────────────
     if settings.rerank_enabled:

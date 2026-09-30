@@ -25,7 +25,11 @@ export default function Login() {
       navigate(from, { replace: true });
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.detail || 'Invalid email or password.');
+      if (err.code === 'ERR_NETWORK' || !err.response) {
+        setError('Cannot connect to server (backend port 8000). Please ensure server is running.');
+      } else {
+        setError(err.response?.data?.detail || 'Invalid email or password.');
+      }
     } finally {
       setLoading(false);
     }
