@@ -6,10 +6,27 @@ Supports top-k similarity search with user and document filters,
 plus an optional MMR (Maximal Marginal Relevance) mode for diversity.
 """
 
+import re
 from app.core.config import settings
 from app.core.logger import logger
 from app.services.embeddings import embed_query
 from app.services.vectorstore import search
+
+
+STOPWORDS = {
+    "what", "is", "are", "the", "a", "an", "in", "of", "to", "for", "on", "at",
+    "by", "with", "about", "from", "and", "or", "tell", "me", "show", "give",
+    "this", "that", "these", "those", "my", "his", "her", "their", "its", "who",
+    "which", "when", "where", "why", "how", "all", "any", "both", "each", "few",
+    "more", "most", "other", "some", "such", "than", "too", "very", "can", "will",
+    "just", "should", "now", "does", "did", "have", "has", "had", "been", "were", "was"
+}
+
+
+def _extract_keywords(text: str) -> list[str]:
+    """Extract informative lowercase keywords from query, excluding stopwords."""
+    words = re.findall(r"[a-zA-Z0-9]+", text.lower())
+    return [w for w in words if len(w) > 2 and w not in STOPWORDS]
 
 
 def retrieve_chunks(
@@ -64,15 +81,29 @@ def retrieve_chunks(
     metadatas = results["metadatas"][0]
     distances = results["distances"][0]
 
+    query_keywords = _extract_keywords(question)
+
     for i in range(len(ids)):
         # ChromaDB returns cosine distance; convert to similarity score
         # cosine distance = 1 - cosine similarity
-        score = 1.0 - distances[i]
+        raw_score = 1.0 - distances[i]
+
+        # Calculate lexical overlap boost for exact token or prefix matches
+        content_lower = documents[i].lower()
+        matched_kws = 0
+        for kw in query_keywords:
+            if kw in content_lower or (len(kw) >= 4 and kw[:4] in content_lower):
+                matched_kws += 1
+
+        # Add modest lexical boost (up to 0.15) to help direct keyword matches surface
+        lexical_boost = min(matched_kws * 0.05, 0.15)
+        score = raw_score + lexical_boost
 
         chunks.append({
             "content": documents[i],
             "metadata": metadatas[i],
             "score": round(score, 4),
+            "raw_score": round(raw_score, 4),
             "vector_id": ids[i],
         })
 
@@ -83,7 +114,15 @@ def retrieve_chunks(
     threshold = settings.score_threshold
     filtered = [c for c in chunks if c["score"] >= threshold]
 
-    if not filtered:
+    # Adaptive fallback: if all chunks scored below threshold, but positive matches exist,
+    # fall back to top candidates instead of dropping everything and returning a false "not found"
+    if not filtered and chunks and chunks[0]["score"] > 0.0:
+        logger.info(
+            f"All chunks below threshold ({threshold}), falling back to top candidates "
+            f"(best score: {chunks[0]['score']}, raw: {chunks[0].get('raw_score')})"
+        )
+        filtered = chunks[:top_k]
+    elif not filtered:
         logger.info(f"All chunks below threshold ({threshold}). Best score: {chunks[0]['score'] if chunks else 'N/A'}")
         return []
 

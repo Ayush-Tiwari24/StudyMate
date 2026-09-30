@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     top_k: int = 5
     fetch_k: int = 10
     use_mmr: bool = True
-    score_threshold: float = 0.30
+    score_threshold: float = 0.05
 
     # ── Reranker ─────────────────────────────────────────────────
     rerank_enabled: bool = False

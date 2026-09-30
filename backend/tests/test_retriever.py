@@ -33,3 +33,17 @@ def test_reranker_disabled_passthrough():
     ]
     result = rerank_chunks("test", chunks, top_n=5)
     assert len(result) == 2
+
+
+def test_extract_keywords():
+    """Keyword extractor should filter out stopwords and return meaningful tokens."""
+    from app.services.retrieval.retriever import _extract_keywords
+
+    tokens = _extract_keywords("what are certification acheived in this profile")
+    assert "certification" in tokens
+    assert "acheived" in tokens
+    assert "profile" in tokens
+    assert "what" not in tokens
+    assert "are" not in tokens
+    assert "this" not in tokens
+
