@@ -12,6 +12,8 @@ import SourcePanel from '../components/source/SourcePanel';
 import KeyboardShortcutsModal from '../components/chat/KeyboardShortcutsModal';
 import { listChats, getChat, createChat } from '../api/chat';
 import { PanelLeft, PanelLeftClose, HelpCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function Chat() {
   const { chatId } = useParams();
@@ -41,6 +43,7 @@ export default function Chat() {
   const [questionText, setQuestionText] = useState('');
   const textareaRef = useRef(null);
   const scrollAnchorRef = useRef(null);
+  const isSendingRef = useRef(false);
 
   // Handle window resize for mobile breakpoint
   useEffect(() => {
@@ -147,46 +150,51 @@ export default function Chat() {
   // Send question handler
   const handleSendQuestion = async (overrideText) => {
     const q = (overrideText || questionText).trim();
-    if (!q || isStreaming || selectedDocIds.length === 0) return;
+    if (!q || isStreaming || isSendingRef.current || selectedDocIds.length === 0) return;
 
-    setLastQuery(q);
-    let activeChatId = currentChat?.id;
+    isSendingRef.current = true;
+    try {
+      setLastQuery(q);
+      let activeChatId = currentChat?.id;
 
-    if (!activeChatId) {
-      try {
-        const res = await createChat({
-          title: q.slice(0, 36),
-          document_ids: selectedDocIds,
-        });
-        const newChat = res.data;
-        setCurrentChat(newChat);
-        activeChatId = newChat.id;
-        navigate(`/chat/${newChat.id}`, { replace: true });
-      } catch (err) {
-        console.error('Failed to create new chat session:', err);
+      if (!activeChatId) {
+        try {
+          const res = await createChat({
+            title: q.slice(0, 36),
+            document_ids: selectedDocIds,
+          });
+          const newChat = res.data;
+          setCurrentChat(newChat);
+          activeChatId = newChat.id;
+          navigate(`/chat/${newChat.id}`, { replace: true });
+        } catch (err) {
+          console.error('Failed to create new chat session:', err);
+        }
       }
+
+      // Add user message to UI immediately
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: 'user',
+          content: q,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      setQuestionText('');
+
+      if (isMobile) {
+        setMobileTab('answer');
+      }
+
+      await ask({
+        question: q,
+        documentIds: selectedDocIds,
+      });
+    } finally {
+      isSendingRef.current = false;
     }
-
-    // Add user message to UI immediately
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        role: 'user',
-        content: q,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-    setQuestionText('');
-
-    if (isMobile) {
-      setMobileTab('answer');
-    }
-
-    await ask({
-      question: q,
-      documentIds: selectedDocIds,
-    });
   };
 
   // Open citation in source panel
@@ -243,6 +251,11 @@ export default function Chat() {
     const msg = messages[i];
     if (msg.role === 'user') {
       const nextMsg = messages[i + 1]?.role === 'assistant' ? messages[i + 1] : null;
+      // If streaming and this is the active user message waiting for assistant response,
+      // skip it from completed exchanges so it is NOT rendered twice (it renders in the active streaming block below)
+      if (isStreaming && !nextMsg && i === messages.length - 1) {
+        continue;
+      }
       exchanges.push({
         id: msg.id,
         question: msg.content,
@@ -415,7 +428,9 @@ export default function Chat() {
                       </div>
                     ) : (
                       <div className="prose-answer">
-                        <p>{streamedText}</p>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {streamedText}
+                        </ReactMarkdown>
                       </div>
                     )}
                   </div>
