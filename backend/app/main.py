@@ -51,6 +51,14 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Pre-warm embedding model into RAM so user queries never wait
+    try:
+        from app.services.embeddings import get_embedding_model
+        get_embedding_model()
+        logger.info("Embedding model pre-warmed and ready.")
+    except Exception as e:
+        logger.warning(f"Could not pre-warm embedding model: {e}")
+
     yield
 
     # ── Shutdown ──
