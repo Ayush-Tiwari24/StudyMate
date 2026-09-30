@@ -233,14 +233,23 @@ export default function Settings() {
                   </label>
                   <select
                     value={settings.llm_provider}
-                    onChange={(e) =>
-                      setSettingsState((p) => ({ ...p, llm_provider: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      let defaultModel = settings.model_name;
+                      if (val === 'groq') defaultModel = 'openai/gpt-oss-120b';
+                      else if (val === 'openai') defaultModel = 'gpt-4o-mini';
+                      else if (val === 'ollama') defaultModel = 'llama3.2:3b';
+                      setSettingsState((p) => ({
+                        ...p,
+                        llm_provider: val,
+                        model_name: defaultModel,
+                      }));
+                    }}
                     className="text-xs p-2 rounded-[6px] border border-[var(--line)] bg-[var(--paper)] text-[var(--ink)] outline-none focus:border-[var(--accent)]"
                   >
+                    <option value="groq">Groq (Blazing Fast LPU)</option>
                     <option value="openai">OpenAI</option>
-                    <option value="gemini">Google Gemini</option>
-                    <option value="anthropic">Anthropic Claude</option>
+                    <option value="ollama">Ollama (Local / Free)</option>
                   </select>
                 </div>
 

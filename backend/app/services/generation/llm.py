@@ -1,7 +1,7 @@
 """
 StudyMate RAG — LLM Factory
 
-Returns an OpenAI or Ollama chat model based on configuration.
+Returns a Groq, OpenAI, or Ollama chat model based on configuration.
 Supports both streaming and non-streaming modes.
 """
 
@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.logger import logger
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=4)
 def get_llm(streaming: bool = True):
     """
     Create and cache an LLM instance based on the configured provider.
@@ -20,9 +20,23 @@ def get_llm(streaming: bool = True):
         streaming: Whether to enable streaming mode
 
     Returns:
-        A LangChain chat model (ChatOpenAI or ChatOllama).
+        A LangChain chat model.
     """
-    if settings.llm_provider == "openai":
+    if settings.llm_provider == "groq":
+        from langchain_openai import ChatOpenAI
+
+        api_key = settings.groq_api_key or settings.openai_api_key
+        logger.info(f"Using Groq LLM: {settings.groq_model}")
+        return ChatOpenAI(
+            model=settings.groq_model,
+            base_url=settings.groq_base_url,
+            api_key=api_key or "dummy_groq_key",
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+            streaming=streaming,
+        )
+
+    elif settings.llm_provider == "openai":
         from langchain_openai import ChatOpenAI
 
         logger.info(f"Using OpenAI LLM: {settings.openai_model}")
@@ -54,7 +68,20 @@ def get_llm_for_rewrite():
     Get a non-streaming LLM for the question rewrite step.
     Uses the same provider but without streaming.
     """
-    if settings.llm_provider == "openai":
+    if settings.llm_provider == "groq":
+        from langchain_openai import ChatOpenAI
+
+        api_key = settings.groq_api_key or settings.openai_api_key
+        return ChatOpenAI(
+            model=settings.groq_model,
+            base_url=settings.groq_base_url,
+            api_key=api_key or "dummy_groq_key",
+            temperature=0.0,
+            max_tokens=200,
+            streaming=False,
+        )
+
+    elif settings.llm_provider == "openai":
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
@@ -64,6 +91,7 @@ def get_llm_for_rewrite():
             max_tokens=200,
             streaming=False,
         )
+
     elif settings.llm_provider == "ollama":
         from langchain_ollama import ChatOllama
 
@@ -73,5 +101,6 @@ def get_llm_for_rewrite():
             temperature=0.0,
             num_predict=200,
         )
+
     else:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")

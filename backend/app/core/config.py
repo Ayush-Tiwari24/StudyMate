@@ -35,9 +35,12 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
 
     # ── LLM Provider ────────────────────────────────────────────
-    llm_provider: str = "openai"  # "openai" | "ollama"
+    llm_provider: str = "groq"  # "groq" | "openai" | "ollama"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2:3b"
 
