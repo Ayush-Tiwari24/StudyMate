@@ -2,13 +2,17 @@ import React from 'react';
 import Chip from '../ui/Chip';
 
 export default function ScopeChips({
-  selectedDocIds = [],
+  selectedDocIds,
   documents = [],
   onRemoveDoc,
+  onRemoveScope,
   onSelectAll,
   className = '',
 }) {
-  const selectedDocs = documents.filter((d) => selectedDocIds.includes(d.id));
+  const removeHandler = onRemoveDoc || onRemoveScope;
+  const selectedDocs = selectedDocIds
+    ? documents.filter((d) => selectedDocIds.includes(d.id))
+    : documents;
 
   return (
     <div className={`flex items-center gap-1.5 flex-wrap ${className}`}>
@@ -34,7 +38,7 @@ export default function ScopeChips({
           <Chip
             key={doc.id}
             label={doc.filename}
-            onRemove={() => onRemoveDoc && onRemoveDoc(doc.id)}
+            onRemove={() => removeHandler && removeHandler(doc.id)}
           />
         ))
       )}

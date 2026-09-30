@@ -44,6 +44,7 @@ export default function Chat() {
   const textareaRef = useRef(null);
   const scrollAnchorRef = useRef(null);
   const isSendingRef = useRef(false);
+  const currentChatRef = useRef(null);
 
   // Handle window resize for mobile breakpoint
   useEffect(() => {
@@ -83,13 +84,20 @@ export default function Chat() {
   useEffect(() => {
     async function loadCurrentChat() {
       if (!chatId) {
+        currentChatRef.current = null;
         setCurrentChat(null);
         setMessages([]);
         return;
       }
 
+      // If we already have this chat session in memory, don't wipe active in-flight messages
+      if (currentChatRef.current && String(currentChatRef.current.id) === String(chatId)) {
+        return;
+      }
+
       try {
         const res = await getChat(chatId);
+        currentChatRef.current = res.data;
         setCurrentChat(res.data);
         setMessages(res.data.messages || []);
         if (res.data.document_ids && res.data.document_ids.length > 0) {
@@ -164,6 +172,7 @@ export default function Chat() {
             document_ids: selectedDocIds,
           });
           const newChat = res.data;
+          currentChatRef.current = newChat;
           setCurrentChat(newChat);
           activeChatId = newChat.id;
           navigate(`/chat/${newChat.id}`, { replace: true });
@@ -189,6 +198,7 @@ export default function Chat() {
       }
 
       await ask({
+        chatId: activeChatId,
         question: q,
         documentIds: selectedDocIds,
       });
@@ -332,6 +342,7 @@ export default function Chat() {
               activeChatId={currentChat?.id}
               onSelectChat={(id) => navigate(`/chat/${id}`)}
               onNewQuestion={() => {
+                currentChatRef.current = null;
                 navigate('/chat');
                 setMessages([]);
                 setCurrentChat(null);
@@ -443,8 +454,10 @@ export default function Chat() {
             {/* Bottom Input Area */}
             <div className="p-4 bg-[var(--paper)] border-t border-[var(--line-subtle)] flex flex-col items-center flex-shrink-0">
               <ScopeChips
-                documents={selectedDocs}
-                onRemoveScope={handleRemoveDocScope}
+                selectedDocIds={selectedDocIds}
+                documents={documents}
+                onRemoveDoc={handleRemoveDocScope}
+                onSelectAll={() => setSelectedDocIds(readyDocuments.map((d) => d.id))}
               />
 
               <ChatInput

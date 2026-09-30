@@ -9,19 +9,26 @@ export function useChatStream({ chatId, onMessageComplete }) {
   const abortControllerRef = useRef(null);
 
   const ask = useCallback(
-    async (questionOrObj, docIdsParam = []) => {
+    async (questionOrObj, docIdsParam = [], explicitChatId = null) => {
       let question = '';
       let documentIds = [];
+      let targetChatId = explicitChatId || chatId;
 
       if (typeof questionOrObj === 'object' && questionOrObj !== null) {
         question = questionOrObj.question || '';
         documentIds = questionOrObj.documentIds || questionOrObj.document_ids || [];
+        if (questionOrObj.chatId) {
+          targetChatId = questionOrObj.chatId;
+        }
       } else {
         question = questionOrObj || '';
         documentIds = docIdsParam;
       }
 
-      if (!chatId) return;
+      if (!targetChatId) {
+        console.warn('Cannot stream question without a chatId');
+        return;
+      }
 
       setIsStreaming(true);
       setStreamedText('');
@@ -35,7 +42,7 @@ export function useChatStream({ chatId, onMessageComplete }) {
 
       try {
         await streamQuestion({
-          chatId,
+          chatId: targetChatId,
           question,
           documentIds,
           signal: abortControllerRef.current.signal,
