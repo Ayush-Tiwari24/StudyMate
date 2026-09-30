@@ -1,0 +1,12 @@
+[
+  {
+    "question": "What is normalization in databases?",
+    "ground_truth": "Normalization is the process of organizing tables to reduce redundancy and improve data integrity through normal forms (1NF, 2NF, 3NF, BCNF).",
+    "document": "sample.pdf"
+  },
+  {
+    "question": "What are ACID properties?",
+    "ground_truth": "ACID stands for Atomicity, Consistency, Isolation, and Durability - the four properties that guarantee reliable database transactions.",
+    "document": "sample.pdf"
+  }
+]

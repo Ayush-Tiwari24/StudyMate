@@ -1,0 +1,241 @@
+"""
+StudyMate RAG — Document Routes
+
+POST   /api/documents/upload       — Upload a PDF
+GET    /api/documents              — List user's documents
+GET    /api/documents/{id}/status  — Processing status
+GET    /api/documents/{id}/file    — Download original PDF
+DELETE /api/documents/{id}         — Delete PDF + vectors + chunks
+"""
+
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.core.config import settings
+from app.core.logger import logger
+from app.models.user import User
+from app.models.document import Document
+from app.schemas.document import (
+    DocumentUploadResponse,
+    DocumentResponse,
+    DocumentStatusResponse,
+    DocumentListResponse,
+)
+from app.utils.file_utils import compute_sha256, safe_filename, ensure_dir
+
+router = APIRouter(prefix="/api/documents", tags=["Documents"])
+
+
+@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_202_ACCEPTED)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload a PDF file. Validates type and size, saves to disk,
+    and enqueues background ingestion.
+    """
+    # Validate content type
+    if file.content_type != "application/pdf":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF files are accepted.",
+        )
+
+    # Read file content
+    content = await file.read()
+
+    # Validate file size
+    if len(content) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File exceeds maximum size of {settings.max_upload_mb} MB.",
+        )
+
+    # Check for duplicates via SHA-256 hash
+    file_hash = compute_sha256(content)
+    existing = (
+        db.query(Document)
+        .filter(Document.user_id == current_user.id, Document.file_hash == file_hash)
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This file has already been uploaded as '{existing.filename}'.",
+        )
+
+    # Save file to disk
+    user_upload_dir = ensure_dir(settings.upload_path / str(current_user.id))
+    stored_name = safe_filename(file.filename or "document.pdf")
+    file_path = user_upload_dir / stored_name
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Create database record
+    document = Document(
+        user_id=current_user.id,
+        filename=file.filename or "document.pdf",
+        file_path=str(file_path),
+        file_hash=file_hash,
+        size_bytes=len(content),
+        status="uploaded",
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    logger.info(f"Document uploaded: id={document.id} filename={document.filename}")
+
+    # Enqueue ingestion pipeline as background task
+    from app.services.ingestion.pipeline import run_ingestion_pipeline
+    background_tasks.add_task(run_ingestion_pipeline, document.id)
+
+    return DocumentUploadResponse(
+        document_id=document.id,
+        filename=document.filename,
+        status="uploaded",
+    )
+
+
+@router.get("", response_model=DocumentListResponse)
+def list_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all documents belonging to the current user."""
+    docs = (
+        db.query(Document)
+        .filter(Document.user_id == current_user.id)
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
+    return DocumentListResponse(
+        documents=[DocumentResponse.model_validate(d) for d in docs],
+        total=len(docs),
+    )
+
+
+@router.get("/{document_id}/status", response_model=DocumentStatusResponse)
+def get_document_status(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the processing status of a document (used for polling)."""
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    return DocumentStatusResponse(
+        document_id=doc.id,
+        status=doc.status,
+        pages=doc.pages,
+        chunks=doc.chunk_count,
+        error_message=doc.error_message,
+    )
+
+
+@router.get("/{document_id}/file")
+def download_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download / view the original PDF file."""
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    file_path = Path(doc.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk.")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=doc.filename,
+        media_type="application/pdf",
+    )
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_200_OK)
+def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Delete a document: remove file from disk, vectors from ChromaDB,
+    and all related DB records (chunks, etc.).
+    """
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    # Delete vectors from ChromaDB
+    try:
+        from app.services.vectorstore import delete_vectors_by_document
+        delete_vectors_by_document(document_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete vectors for doc {document_id}: {e}")
+
+    # Delete file from disk
+    file_path = Path(doc.file_path)
+    if file_path.exists():
+        file_path.unlink()
+
+    # Delete from database (cascades to chunks)
+    db.delete(doc)
+    logger.info(f"Document deleted: id={document_id}")
+    return {"message": "Document deleted successfully."}
+
+
+@router.post("/{document_id}/retry", response_model=DocumentStatusResponse)
+def retry_document(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Re-run the ingestion pipeline for a failed or stuck document."""
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    doc.status = "uploaded"
+    doc.error_message = None
+    db.commit()
+
+    from app.services.ingestion.pipeline import run_ingestion_pipeline
+    background_tasks.add_task(run_ingestion_pipeline, doc.id)
+
+    return DocumentStatusResponse(
+        document_id=doc.id,
+        status="uploaded",
+        pages=doc.pages,
+        chunks=doc.chunk_count,
+        error_message=None,
+    )

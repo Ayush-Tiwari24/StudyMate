@@ -1,0 +1,11 @@
+{
+  "name": "bookworm-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "StudyMate RAG — Academic Question Answering System",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run dev"
+  }
+}

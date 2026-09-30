@@ -1,0 +1,55 @@
+# ──── Python ────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+.venv/
+env/
+backend/venv/
+
+# ──── Environment & Secrets ────
+.env
+.env.*
+!.env.example
+*.env
+backend/.env
+frontend/.env
+
+# ──── Data & Databases (runtime) ────
+data/
+backend/data/
+*.db
+*.sqlite3
+
+# ──── Node & Frontend ────
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+frontend/build/
+.eslintcache
+*.tsbuildinfo
+
+# ──── IDE & OS ────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ──── Logs & Testing ────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
