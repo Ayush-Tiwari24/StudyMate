@@ -19,6 +19,11 @@ class Settings(BaseSettings):
 
     # ── Database ─────────────────────────────────────────────────
     database_url: str = "sqlite:///./data/app.db"
+    auto_create_tables: bool = True
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_recycle: int = 1800
+    db_pool_pre_ping: bool = True
 
     # ── File Storage ─────────────────────────────────────────────
     upload_dir: str = "./data/raw_pdfs"

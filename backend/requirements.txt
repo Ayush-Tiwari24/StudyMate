@@ -23,3 +23,5 @@ pytest
 httpx
 python-dotenv
 aiofiles
+psycopg2-binary
+boto3

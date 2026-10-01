@@ -13,9 +13,18 @@ from app.core.config import settings
 
 from pathlib import Path
 
-# SQLite needs connect_args for thread safety and parent directory created
-connect_args = {}
 db_url = settings.database_url
+
+# Normalise postgres:// or plain postgresql:// to postgresql+psycopg2://
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+engine_kwargs = {
+    "echo": settings.debug,
+}
+
 if db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
     # Parse path from sqlite:///...
@@ -27,21 +36,29 @@ if db_url.startswith("sqlite"):
             db_path = (backend_dir / db_path).resolve()
             db_url = f"sqlite:///{db_path.as_posix()}"
         db_path.parent.mkdir(parents=True, exist_ok=True)
+    engine_kwargs["connect_args"] = connect_args
+else:
+    # PostgreSQL / production pool settings
+    engine_kwargs["pool_pre_ping"] = settings.db_pool_pre_ping
+    engine_kwargs["pool_size"] = settings.db_pool_size
+    engine_kwargs["max_overflow"] = settings.db_max_overflow
+    engine_kwargs["pool_recycle"] = settings.db_pool_recycle
 
 engine = create_engine(
     db_url,
-    connect_args=connect_args,
-    echo=settings.debug,
+    **engine_kwargs,
 )
 
 # Enforce foreign keys on SQLite connections
 if db_url.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
-        if isinstance(dbapi_connection, SQLite3Connection):
+        try:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
+        except Exception:
+            pass
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
