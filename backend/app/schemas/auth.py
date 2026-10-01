@@ -7,7 +7,7 @@ Pydantic models for authentication requests and responses.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
 
 # ── Requests ─────────────────────────────────────────────────────
@@ -17,10 +17,20 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., examples=["amit@example.com"])
     password: str = Field(..., min_length=6, max_length=128)
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
 
 class LoginRequest(BaseModel):
     email: EmailStr = Field(..., examples=["amit@example.com"])
     password: str = Field(...)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
 
 
 # ── Responses ────────────────────────────────────────────────────

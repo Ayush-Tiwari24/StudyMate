@@ -8,7 +8,7 @@ page/chunk counts, and the chunks themselves.
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, ForeignKey, Text, Table,
+    Column, Integer, String, DateTime, ForeignKey, Text, Table, UniqueConstraint, Index,
 )
 from sqlalchemy.orm import relationship
 
@@ -26,6 +26,10 @@ chat_documents = Table(
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        UniqueConstraint("user_id", "file_hash", name="uq_documents_user_file_hash"),
+        Index("ix_documents_user_status", "user_id", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -35,10 +39,11 @@ class Document(Base):
     size_bytes = Column(Integer, default=0)
     pages = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
+    progress = Column(Integer, default=0, nullable=False)  # 0–100 ingestion percentage
     status = Column(String(20), default="uploaded", nullable=False)  # uploaded | processing | ready | failed
     error_message = Column(Text, nullable=True)
     uploaded_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     # Relationships

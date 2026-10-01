@@ -7,7 +7,7 @@ Messages belong to a chat. Each assistant message can have sources
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -15,6 +15,9 @@ from app.db.base import Base
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (
+        Index("ix_messages_chat_created", "chat_id", "created_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -23,7 +26,7 @@ class Message(Base):
     model_used = Column(String(100), nullable=True)  # e.g. "gpt-4o-mini"
     latency_ms = Column(Integer, nullable=True)
     created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     # Relationships

@@ -21,12 +21,13 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     preferences = Column(JSON, default=dict)  # theme, model prefs, etc.
     created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     # Relationships
     documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
     chats = relationship("Chat", back_populates="owner", cascade="all, delete-orphan")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email!r}>"

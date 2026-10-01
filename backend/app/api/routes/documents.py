@@ -141,6 +141,7 @@ def get_document_status(
     return DocumentStatusResponse(
         document_id=doc.id,
         status=doc.status,
+        progress=doc.progress,
         pages=doc.pages,
         chunks=doc.chunk_count,
         error_message=doc.error_message,
@@ -234,6 +235,7 @@ def retry_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
     doc.status = "uploaded"
+    doc.progress = 0
     doc.error_message = None
     db.commit()
 
@@ -243,6 +245,7 @@ def retry_document(
     return DocumentStatusResponse(
         document_id=doc.id,
         status="uploaded",
+        progress=0,
         pages=doc.pages,
         chunks=doc.chunk_count,
         error_message=None,

@@ -17,7 +17,7 @@ from app.services.ingestion.ocr import needs_ocr, ocr_pdf_pages
 from app.services.ingestion.cleaner import clean_pages
 from app.services.ingestion.chunker import chunk_pages
 from app.services.embeddings import embed_documents
-from app.services.vectorstore import add_chunks
+from app.services.vectorstore import add_chunks, delete_vectors_by_document
 
 
 def run_ingestion_pipeline(document_id: int) -> None:
@@ -35,8 +35,9 @@ def run_ingestion_pipeline(document_id: int) -> None:
             logger.error(f"Ingestion: Document {document_id} not found in DB")
             return
 
-        # Update status to processing
+        # Update status to processing and initial progress
         doc.status = "processing"
+        doc.progress = 5
         doc.error_message = None
         db.commit()
 
@@ -50,6 +51,7 @@ def run_ingestion_pipeline(document_id: int) -> None:
         # ── Step 1: Load PDF ────────────────────────────────────
         pages = load_pdf(file_path)
         doc.pages = len(pages)
+        doc.progress = 20
         db.commit()
 
         if not pages:
@@ -70,6 +72,8 @@ def run_ingestion_pipeline(document_id: int) -> None:
 
         # ── Step 3: Clean text ──────────────────────────────────
         pages = clean_pages(pages)
+        doc.progress = 40
+        db.commit()
 
         # ── Step 4: Chunk ───────────────────────────────────────
         chunks = chunk_pages(
@@ -83,6 +87,9 @@ def run_ingestion_pipeline(document_id: int) -> None:
             _fail(db, doc, "Text was found but could not be chunked.")
             return
 
+        doc.progress = 60
+        db.commit()
+
         # ── Step 5: Embed ───────────────────────────────────────
         chunk_texts = [c["content"] for c in chunks]
 
@@ -94,7 +101,16 @@ def run_ingestion_pipeline(document_id: int) -> None:
             batch_embeddings = embed_documents(batch)
             all_embeddings.extend(batch_embeddings)
 
-        # ── Step 6: Store in vector DB ──────────────────────────
+        doc.progress = 80
+        db.commit()
+
+        # ── Step 6: Store in vector DB (idempotent) ──────────────
+        # Purge any previous vectors for this document
+        try:
+            delete_vectors_by_document(doc.id)
+        except Exception as e:
+            logger.warning(f"Could not purge existing vectors for doc {doc.id}: {e}")
+
         vector_ids = [f"doc_{doc.id}_chunk_{c['metadata']['chunk_index']}" for c in chunks]
         metadatas = [c["metadata"] for c in chunks]
 
@@ -105,7 +121,8 @@ def run_ingestion_pipeline(document_id: int) -> None:
             metadatas=metadatas,
         )
 
-        # ── Step 7: Save chunks to SQL DB ──────────────────────
+        # ── Step 7: Save chunks to SQL DB (idempotent) ──────────
+        db.query(Chunk).filter(Chunk.document_id == doc.id).delete()
         for chunk_data, vector_id in zip(chunks, vector_ids):
             chunk_record = Chunk(
                 document_id=doc.id,
@@ -118,6 +135,7 @@ def run_ingestion_pipeline(document_id: int) -> None:
 
         # ── Step 8: Update document status ──────────────────────
         doc.chunk_count = len(chunks)
+        doc.progress = 100
         doc.status = "ready"
         doc.error_message = None
         db.commit()
@@ -143,6 +161,7 @@ def run_ingestion_pipeline(document_id: int) -> None:
 def _fail(db, doc: Document, message: str) -> None:
     """Mark a document as failed with an error message."""
     doc.status = "failed"
+    doc.progress = 0
     doc.error_message = message
     db.commit()
     logger.warning(f"Document failed: id={doc.id} — {message}")
