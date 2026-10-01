@@ -6,16 +6,24 @@ POST /api/auth/login     — Authenticate and get JWT tokens
 GET  /api/auth/me        — Get current user profile
 """
 
+import hashlib
+from datetime import datetime, timezone, timedelta
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
+from app.core.config import settings
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.models.user import User
+from app.models.refresh_token import RefreshToken
 from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
     DeleteAccountRequest,
+    RefreshTokenRequest,
+    LogoutRequest,
     TokenResponse,
     UserResponse,
     RegisterResponse,
@@ -23,6 +31,18 @@ from app.schemas.auth import (
 from app.core.logger import logger
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+
+def _record_refresh_token(db: Session, user_id: int, token: str) -> None:
+    """Helper to store a hashed refresh token in database for rotation tracking."""
+    payload = decode_token(token)
+    if payload and "exp" in payload:
+        exp_dt = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+    else:
+        exp_dt = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_expire_days)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    db.add(RefreshToken(user_id=user_id, token_hash=token_hash, expires_at=exp_dt))
+    db.commit()
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -47,6 +67,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    _record_refresh_token(db, user.id, refresh_token)
 
     return RegisterResponse(
         id=user.id,
@@ -72,12 +93,85 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    _record_refresh_token(db, user.id, refresh_token)
 
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         user=UserResponse.model_validate(user),
     )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh_tokens(body: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """Rotate a valid, unrevoked refresh token for a new access + refresh token."""
+    payload = decode_token(body.refresh_token)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token.",
+        )
+
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing subject.",
+        )
+
+    try:
+        user_id = int(sub)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject.",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found.",
+        )
+
+    token_hash = hashlib.sha256(body.refresh_token.encode("utf-8")).hexdigest()
+    record = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == token_hash,
+        RefreshToken.user_id == user_id,
+    ).first()
+
+    now_utc = datetime.now(timezone.utc)
+    if not record or record.revoked_at is not None or record.expires_at < now_utc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired or been revoked.",
+        )
+
+    # Revoke old token (rotation)
+    record.revoked_at = now_utc
+
+    # Issue new pair
+    new_access = create_access_token(data={"sub": str(user_id)})
+    new_refresh = create_refresh_token(data={"sub": str(user_id)})
+    _record_refresh_token(db, user_id, new_refresh)
+
+    return TokenResponse(
+        access_token=new_access,
+        refresh_token=new_refresh,
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/logout")
+def logout(body: Optional[LogoutRequest] = None, db: Session = Depends(get_db)):
+    """Revoke the presented refresh token on logout."""
+    if body and body.refresh_token:
+        token_hash = hashlib.sha256(body.refresh_token.encode("utf-8")).hexdigest()
+        record = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
+        if record and record.revoked_at is None:
+            record.revoked_at = datetime.now(timezone.utc)
+            db.commit()
+    return {"message": "Logged out successfully."}
 
 
 @router.get("/me", response_model=UserResponse)

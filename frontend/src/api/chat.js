@@ -1,4 +1,4 @@
-import client, { getToken } from './client';
+import client, { getToken, refreshAuthToken } from './client';
 import {
   mockListChats,
   mockGetChat,
@@ -78,13 +78,13 @@ export async function streamQuestion({
     });
   }
 
-  const token = getToken();
+  let token = getToken();
   const base = import.meta.env.VITE_API_URL
     ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
     : '/api';
 
   try {
-    const response = await fetch(`${base}/chats/${chatId}/ask`, {
+    let response = await fetch(`${base}/chats/${chatId}/ask`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -97,6 +97,29 @@ export async function streamQuestion({
       }),
       signal,
     });
+
+    if (response.status === 401) {
+      // Retry once with refreshed token
+      try {
+        const newToken = await refreshAuthToken();
+        response = await fetch(`${base}/chats/${chatId}/ask`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${newToken}`,
+          },
+          body: JSON.stringify({
+            question,
+            document_ids: documentIds,
+            ...(top_k ? { top_k } : {}),
+          }),
+          signal,
+        });
+      } catch (refreshErr) {
+        window.location.href = '/login';
+        throw refreshErr;
+      }
+    }
 
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));

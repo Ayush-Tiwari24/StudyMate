@@ -8,14 +8,26 @@ export function getToken() {
   return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
 }
 
-export function setToken(token, remember = true) {
+export function getRefreshToken() {
+  return localStorage.getItem('refresh_token') || sessionStorage.getItem('refresh_token');
+}
+
+export function setTokens(accessToken, refreshToken, remember = true) {
   if (remember) {
-    localStorage.setItem('access_token', token);
+    if (accessToken) localStorage.setItem('access_token', accessToken);
+    if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
     sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
   } else {
-    sessionStorage.setItem('access_token', token);
+    if (accessToken) sessionStorage.setItem('access_token', accessToken);
+    if (refreshToken) sessionStorage.setItem('refresh_token', refreshToken);
     localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
   }
+}
+
+export function setToken(token, remember = true) {
+  setTokens(token, null, remember);
 }
 
 export function clearTokens() {
@@ -23,6 +35,23 @@ export function clearTokens() {
   localStorage.removeItem('refresh_token');
   sessionStorage.removeItem('access_token');
   sessionStorage.removeItem('refresh_token');
+}
+
+export async function refreshAuthToken() {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    clearTokens();
+    throw new Error('No refresh token available');
+  }
+
+  const response = await axios.post(`${apiBaseUrl}/auth/refresh`, {
+    refresh_token: refreshToken,
+  });
+
+  const { access_token, refresh_token: new_refresh } = response.data;
+  const isRemember = !!localStorage.getItem('access_token') || !!localStorage.getItem('refresh_token');
+  setTokens(access_token, new_refresh, isRemember);
+  return access_token;
 }
 
 const client = axios.create({
@@ -41,12 +70,36 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor: normalise errors & handle 401 / 429
+// Response interceptor: auto-refresh token on 401 once, normalise errors & handle 429
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
     const status = error.response?.status;
     const data = error.response?.data;
+
+    // 401 Auto-refresh single-retry logic
+    if (
+      status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/login') &&
+      !originalRequest.url?.includes('/auth/register') &&
+      !originalRequest.url?.includes('/auth/refresh')
+    ) {
+      originalRequest._retry = true;
+      try {
+        const newAccessToken = await refreshAuthToken();
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return client(originalRequest);
+      } catch (refreshErr) {
+        clearTokens();
+        if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshErr);
+      }
+    }
 
     let normalizedMessage = 'Something unexpected happened.';
     let errorCode = 'UNKNOWN';
@@ -62,7 +115,7 @@ client.interceptors.response.use(
       }
     }
 
-    if (status === 401) {
+    if (status === 401 && !originalRequest?._retry) {
       clearTokens();
       if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
         window.location.href = '/login';

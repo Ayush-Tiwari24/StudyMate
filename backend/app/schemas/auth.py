@@ -37,6 +37,14 @@ class DeleteAccountRequest(BaseModel):
     password: str = Field(..., min_length=1, description="Password confirmation to delete account")
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1, description="Refresh token to rotate")
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = Field(None, description="Optional refresh token to revoke on logout")
+
+
 # ── Responses ────────────────────────────────────────────────────
 
 class UserResponse(BaseModel):

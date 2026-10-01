@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getMe, login as apiLogin, register as apiRegister } from '../api/auth';
-import { getToken, setToken as saveToken, clearTokens } from '../api/client';
+import client, { getToken, getRefreshToken, setTokens, clearTokens } from '../api/client';
 
 const AuthContext = createContext(null);
 
@@ -35,9 +35,9 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password, rememberMe = true) => {
     const res = await apiLogin(email, password);
-    const { access_token, user: userData } = res.data;
+    const { access_token, refresh_token, user: userData } = res.data;
     if (access_token) {
-      saveToken(access_token, rememberMe);
+      setTokens(access_token, refresh_token, rememberMe);
       setTokenState(access_token);
     }
     if (userData) {
@@ -55,9 +55,9 @@ export function AuthProvider({ children }) {
 
   const register = async (name, email, password, rememberMe = true) => {
     const res = await apiRegister(name, email, password);
-    const { access_token, user: userData } = res.data;
+    const { access_token, refresh_token, user: userData } = res.data;
     if (access_token) {
-      saveToken(access_token, rememberMe);
+      setTokens(access_token, refresh_token, rememberMe);
       setTokenState(access_token);
     }
     if (userData) {
@@ -83,11 +83,20 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
-    clearTokens();
-    setTokenState(null);
-    setUser(null);
-    window.location.href = '/login';
+  const logout = async () => {
+    const rfToken = getRefreshToken();
+    try {
+      if (rfToken) {
+        await client.post('/auth/logout', { refresh_token: rfToken });
+      }
+    } catch (err) {
+      console.warn('Logout revocation error:', err);
+    } finally {
+      clearTokens();
+      setTokenState(null);
+      setUser(null);
+      window.location.href = '/login';
+    }
   };
 
   const value = {

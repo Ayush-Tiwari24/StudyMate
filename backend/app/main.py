@@ -29,6 +29,15 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     logger.info(f"Starting {settings.app_name}...")
 
+    # Security check: fail startup in non-debug / production mode when JWT_SECRET is default
+    if not settings.debug and settings.jwt_secret == "change-me-to-a-random-string":
+        error_msg = (
+            "CRITICAL: JWT_SECRET is set to the default insecure placeholder. "
+            "In non-debug / production mode, you must set a secure JWT_SECRET in environment variables."
+        )
+        logger.critical(error_msg)
+        raise RuntimeError(error_msg)
+
     # Create tables if enabled (dev convenience; disabled in production where Alembic runs)
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
