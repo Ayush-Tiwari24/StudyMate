@@ -28,8 +28,8 @@ def get_chroma_client() -> chromadb.ClientAPI:
     return client
 
 
-def get_collection() -> chromadb.Collection:
-    """Get or create the main chunks collection."""
+def get_collection(validate_model: bool = True) -> chromadb.Collection:
+    """Get or create the main chunks collection and validate model consistency."""
     client = get_chroma_client()
     collection = client.get_or_create_collection(
         name=COLLECTION_NAME,
@@ -38,6 +38,16 @@ def get_collection() -> chromadb.Collection:
             "hnsw:space": "cosine",
         },
     )
+    if validate_model and collection.metadata:
+        stored_model = collection.metadata.get("embedding_model")
+        if stored_model and stored_model != settings.embedding_model:
+            error_msg = (
+                f"Embedding model mismatch! Collection uses '{stored_model}', "
+                f"but settings configure '{settings.embedding_model}'. "
+                f"Refusing to add vectors until scripts/reindex.py is run."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     return collection
 
 

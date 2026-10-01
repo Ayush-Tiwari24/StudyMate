@@ -42,17 +42,26 @@ async def lifespan(app: FastAPI):
     logger.info("Data directories ready.")
 
     # Re-queue any documents stuck in "processing" from a previous crash
+    import asyncio
     from app.db.session import SessionLocal
     from app.models.document import Document
+    from app.services.ingestion.pipeline import run_ingestion_pipeline
     db = SessionLocal()
+    stuck_ids = []
     try:
         stuck = db.query(Document).filter(Document.status == "processing").all()
         for doc in stuck:
             doc.status = "uploaded"
-            logger.warning(f"Re-queued stuck document: id={doc.id} filename={doc.filename}")
+            doc.progress = 0
+            stuck_ids.append(doc.id)
+            logger.warning(f"Reset stuck document: id={doc.id} filename={doc.filename}")
         db.commit()
     finally:
         db.close()
+
+    for doc_id in stuck_ids:
+        asyncio.create_task(asyncio.to_thread(run_ingestion_pipeline, doc_id))
+        logger.info(f"Re-queued ingestion for document id={doc_id}")
 
     # Pre-warm embedding model into RAM so user queries never wait
     try:
