@@ -60,6 +60,7 @@ export default function Settings() {
         llm_provider: settings.llm_provider,
         model_name: settings.model_name,
         top_k: settings.top_k,
+        font_scale: settings.font_scale,
       });
 
       // Apply theme & font scale

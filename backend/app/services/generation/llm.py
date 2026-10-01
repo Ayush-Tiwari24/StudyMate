@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.logger import logger
 
 
+@lru_cache(maxsize=32)
 def get_llm(
     streaming: bool = True,
     provider: str | None = None,
@@ -76,6 +77,7 @@ def get_llm(
         raise ValueError(f"Unknown LLM provider: {provider}")
 
 
+@lru_cache(maxsize=32)
 def get_llm_for_rewrite(
     provider: str | None = None,
     model_name: str | None = None,
