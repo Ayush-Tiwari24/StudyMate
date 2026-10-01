@@ -1,19 +1,50 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: studymate-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: studymate
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d studymate"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   backend:
     build: ./backend
+    container_name: studymate-backend
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/studymate
+      AUTO_CREATE_TABLES: "false"
+      FRONTEND_ORIGIN: http://localhost
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - app_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
     build: ./frontend
+    container_name: studymate-frontend
     ports:
       - "80:80"
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  pgdata:
+  app_data:

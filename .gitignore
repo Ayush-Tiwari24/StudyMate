@@ -24,6 +24,8 @@ data/
 backend/data/
 *.db
 *.sqlite3
+*.pdf
+frontend/public/sample.pdf
 
 # ──── Node & Frontend ────
 node_modules/
