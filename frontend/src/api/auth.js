@@ -18,7 +18,12 @@ export const getMe = () => {
   return client.get('/auth/me');
 };
 
-export const deleteAccount = () => {
-  return client.delete('/auth/me');
+export const deleteAccount = (password) => {
+  return client.delete('/auth/me', { data: { password } });
 };
+
+export const exportUserData = () => {
+  return client.get('/auth/me/export');
+};
+
 

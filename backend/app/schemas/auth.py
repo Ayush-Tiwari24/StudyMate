@@ -33,6 +33,10 @@ class LoginRequest(BaseModel):
         return v.strip().lower()
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(..., min_length=1, description="Password confirmation to delete account")
+
+
 # ── Responses ────────────────────────────────────────────────────
 
 class UserResponse(BaseModel):

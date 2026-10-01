@@ -15,10 +15,12 @@ from app.models.user import User
 from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
+    DeleteAccountRequest,
     TokenResponse,
     UserResponse,
     RegisterResponse,
 )
+from app.core.logger import logger
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -84,44 +86,95 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.get("/me/export")
+def export_user_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export the user's complete chat history and documents metadata as JSON."""
+    chats_data = []
+    for chat in current_user.chats:
+        msgs = []
+        for m in chat.messages:
+            sources = [
+                {
+                    "document_id": s.document_id,
+                    "page": s.page,
+                    "score": s.score,
+                    "snippet": s.snippet,
+                }
+                for s in m.sources
+            ]
+            msgs.append({
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "model_used": m.model_used,
+                "latency_ms": m.latency_ms,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "sources": sources,
+            })
+        chats_data.append({
+            "id": chat.id,
+            "title": chat.title,
+            "created_at": chat.created_at.isoformat() if chat.created_at else None,
+            "updated_at": chat.updated_at.isoformat() if chat.updated_at else None,
+            "documents": [{"id": d.id, "filename": d.filename} for d in chat.documents],
+            "messages": msgs,
+        })
+    return {
+        "user": {
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        },
+        "chats": chats_data,
+    }
+
+
 @router.delete("/me", status_code=status.HTTP_200_OK)
 @router.delete("/account", status_code=status.HTTP_200_OK)
 def delete_account(
+    body: DeleteAccountRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Permanently delete the user's account and all associated data:
-    - ChromaDB vector embeddings
-    - Uploaded files on disk
-    - Database records (documents, chunks, chats, messages, feedback)
+    Permanently delete the user's account and all associated data.
+    Requires password confirmation in the request body.
+    Deletes in order: SQL rows committed, vectors, stored files.
     """
+    # 1. Verify password confirmation
+    if not verify_password(body.password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect password.",
+        )
+
     user_id = current_user.id
+    doc_ids = [doc.id for doc in current_user.documents]
 
-    # 1. Delete all vectors from ChromaDB for all user documents
-    try:
-        from app.services.vectorstore import delete_vectors_by_document
-        for doc in current_user.documents:
-            delete_vectors_by_document(doc.id)
-    except Exception as e:
-        from app.core.logger import logger
-        logger.warning(f"Error removing vectors for user {user_id}: {e}")
-
-    # 2. Delete user's physical files directory
-    try:
-        import shutil
-        from app.core.config import settings
-        user_dir = settings.upload_path / str(user_id)
-        if user_dir.exists():
-            shutil.rmtree(user_dir, ignore_errors=True)
-    except Exception as e:
-        from app.core.logger import logger
-        logger.warning(f"Error removing files for user {user_id}: {e}")
-
-    # 3. Delete user from database (cascades to all user records)
+    # 2. Delete user row in SQL and commit (cascades to documents, chats, chunks, messages, feedback)
     db.delete(current_user)
     db.commit()
+    logger.info(f"User records deleted from SQL: id={user_id}")
 
-    from app.core.logger import logger
+    # 3. Delete user's vectors from vector store (best-effort)
+    try:
+        from app.services.vectorstore import delete_vectors_by_document
+        for doc_id in doc_ids:
+            delete_vectors_by_document(doc_id)
+    except Exception as e:
+        logger.warning(f"Error removing vectors for user {user_id}: {e}")
+
+    # 4. Delete user's stored files (best-effort)
+    try:
+        from app.services.storage import get_storage
+        storage = get_storage()
+        storage.delete_user_files(user_id)
+    except Exception as e:
+        logger.warning(f"Error removing files for user {user_id}: {e}")
+
     logger.info(f"User account permanently deleted: id={user_id}")
     return {"message": "Account and all associated study data permanently deleted."}

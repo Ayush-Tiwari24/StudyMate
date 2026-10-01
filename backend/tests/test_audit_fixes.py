@@ -132,8 +132,12 @@ def test_delete_account():
     db.commit()
     db.close()
 
-    # Delete account
-    del_resp = client.delete("/api/auth/me", headers=headers)
+    # Attempt deletion with wrong password - must be rejected
+    bad_resp = client.request("DELETE", "/api/auth/me", json={"password": "wrongpassword"}, headers=headers)
+    assert bad_resp.status_code == 400
+
+    # Delete account with correct password
+    del_resp = client.request("DELETE", "/api/auth/me", json={"password": "password123"}, headers=headers)
     assert del_resp.status_code == 200
 
     # Verify user and related objects are gone

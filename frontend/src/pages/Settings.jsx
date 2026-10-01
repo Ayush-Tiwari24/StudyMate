@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { getSettings, updateSettings } from '../api/settings';
-import { deleteAccount } from '../api/auth';
+import { deleteAccount, exportUserData } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { Check, AlertCircle, Trash2 } from 'lucide-react';
+import { Check, AlertCircle, Trash2, Download } from 'lucide-react';
 
 export default function Settings() {
   const { theme, setTheme, fontScale, setFontScale } = useTheme();
@@ -22,6 +22,9 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [exportingData, setExportingData] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [error, setError] = useState(null);
 
@@ -286,6 +289,47 @@ export default function Settings() {
           </form>
         )}
 
+        {/* Export Data */}
+        {!loading && (
+          <div className="bg-[var(--surface)] border border-[var(--line-subtle)] rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+            <div>
+              <h2 className="font-sans text-sm font-semibold text-[var(--ink)] flex items-center gap-1.5">
+                <Download size={14} />
+                <span>Export Account Data</span>
+              </h2>
+              <p className="text-xs text-[var(--muted)] font-sans mt-1 leading-relaxed">
+                Download a JSON archive of all your chats, citations, and document metadata.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={exportingData}
+              onClick={async () => {
+                setExportingData(true);
+                try {
+                  const res = await exportUserData();
+                  const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `studymate_export_${Date.now()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast('Data exported successfully.');
+                } catch (err) {
+                  console.error('Export failed:', err);
+                  toast('Failed to export data.');
+                } finally {
+                  setExportingData(false);
+                }
+              }}
+              className="px-3.5 py-1.5 rounded-[6px] border border-[var(--line-subtle)] text-[var(--ink)] text-xs font-medium hover:bg-[var(--line-subtle)] transition-colors disabled:opacity-50 flex-shrink-0"
+            >
+              {exportingData ? 'Exporting…' : 'Export JSON'}
+            </button>
+          </div>
+        )}
+
         {/* Danger Zone: Account Deletion */}
         {!loading && (
           <div className="bg-[var(--surface)] border border-rose-200 dark:border-rose-900/40 rounded-xl p-6 flex flex-col gap-4 shadow-xs">
@@ -302,29 +346,66 @@ export default function Settings() {
 
               <button
                 type="button"
-                onClick={async () => {
-                  if (
-                    window.confirm(
-                      'Are you absolutely sure you want to permanently delete your account? All your uploaded notes, chats, and vector embeddings will be wiped immediately.'
-                    )
-                  ) {
+                onClick={() => {
+                  setDeletePassword('');
+                  setShowDeleteModal(true);
+                }}
+                className="px-3.5 py-1.5 rounded-[6px] bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition-colors disabled:opacity-50 flex-shrink-0"
+              >
+                Delete Account
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Password Confirmation Modal for Account Deletion */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-[var(--surface)] border border-[var(--line-subtle)] rounded-xl max-w-md w-full p-6 shadow-xl flex flex-col gap-4">
+              <h3 className="font-serif text-lg font-semibold text-rose-600 dark:text-rose-400">
+                Confirm Account Deletion
+              </h3>
+              <p className="text-xs text-[var(--muted)] leading-relaxed">
+                This will permanently delete your account, uploaded documents, chats, and vectors.
+                Please enter your password to confirm:
+              </p>
+              <input
+                type="password"
+                placeholder="Enter your account password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-[6px] border border-[var(--line-subtle)] bg-[var(--paper)] text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-rose-500"
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deletingAccount}
+                  className="px-3 py-1.5 text-xs rounded-[6px] text-[var(--muted)] hover:bg-[var(--line-subtle)] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingAccount || !deletePassword}
+                  onClick={async () => {
                     setDeletingAccount(true);
                     try {
-                      await deleteAccount();
+                      await deleteAccount(deletePassword);
                       toast('Account permanently deleted.');
+                      setShowDeleteModal(false);
                       logout();
                     } catch (err) {
                       console.error('Account deletion failed:', err);
-                      toast('Failed to delete account. Please try again.');
+                      toast(err.response?.data?.detail || 'Failed to delete account. Incorrect password?');
                       setDeletingAccount(false);
                     }
-                  }
-                }}
-                disabled={deletingAccount}
-                className="px-3.5 py-1.5 rounded-[6px] bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition-colors disabled:opacity-50 flex-shrink-0"
-              >
-                {deletingAccount ? 'Deleting…' : 'Delete Account'}
-              </button>
+                  }}
+                  className="px-3.5 py-1.5 text-xs rounded-[6px] bg-rose-600 hover:bg-rose-700 text-white font-medium transition-colors disabled:opacity-50"
+                >
+                  {deletingAccount ? 'Deleting…' : 'Permanently Delete'}
+                </button>
+              </div>
             </div>
           </div>
         )}
