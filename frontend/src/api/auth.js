@@ -17,3 +17,8 @@ export const getMe = () => {
   if (USE_MOCK) return mockGetMe();
   return client.get('/auth/me');
 };
+
+export const deleteAccount = () => {
+  return client.delete('/auth/me');
+};
+

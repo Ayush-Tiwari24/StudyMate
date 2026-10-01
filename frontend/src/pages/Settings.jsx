@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { getSettings, updateSettings } from '../api/settings';
+import { deleteAccount } from '../api/auth';
+import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { Check, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, Trash2 } from 'lucide-react';
 
 export default function Settings() {
   const { theme, setTheme, fontScale, setFontScale } = useTheme();
+  const { logout } = useAuth();
   const { toast } = useToast();
 
   const [settings, setSettingsState] = useState({
@@ -18,6 +21,7 @@ export default function Settings() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [error, setError] = useState(null);
 
@@ -280,6 +284,49 @@ export default function Settings() {
               </button>
             </div>
           </form>
+        )}
+
+        {/* Danger Zone: Account Deletion */}
+        {!loading && (
+          <div className="bg-[var(--surface)] border border-rose-200 dark:border-rose-900/40 rounded-xl p-6 flex flex-col gap-4 shadow-xs">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-sans text-sm font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                  <Trash2 size={14} />
+                  <span>Danger Zone: Delete Account</span>
+                </h2>
+                <p className="text-xs text-[var(--muted)] font-sans mt-1 leading-relaxed">
+                  Permanently erase your account, all uploaded PDF materials, vector embeddings, chats, and saved notes. This action is irreversible.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (
+                    window.confirm(
+                      'Are you absolutely sure you want to permanently delete your account? All your uploaded notes, chats, and vector embeddings will be wiped immediately.'
+                    )
+                  ) {
+                    setDeletingAccount(true);
+                    try {
+                      await deleteAccount();
+                      toast('Account permanently deleted.');
+                      logout();
+                    } catch (err) {
+                      console.error('Account deletion failed:', err);
+                      toast('Failed to delete account. Please try again.');
+                      setDeletingAccount(false);
+                    }
+                  }
+                }}
+                disabled={deletingAccount}
+                className="px-3.5 py-1.5 rounded-[6px] bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition-colors disabled:opacity-50 flex-shrink-0"
+              >
+                {deletingAccount ? 'Deleting…' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

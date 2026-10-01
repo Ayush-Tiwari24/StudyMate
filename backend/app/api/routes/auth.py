@@ -82,3 +82,46 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 def get_me(current_user: User = Depends(get_current_user)):
     """Return the currently authenticated user's profile."""
     return current_user
+
+
+@router.delete("/me", status_code=status.HTTP_200_OK)
+@router.delete("/account", status_code=status.HTTP_200_OK)
+def delete_account(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Permanently delete the user's account and all associated data:
+    - ChromaDB vector embeddings
+    - Uploaded files on disk
+    - Database records (documents, chunks, chats, messages, feedback)
+    """
+    user_id = current_user.id
+
+    # 1. Delete all vectors from ChromaDB for all user documents
+    try:
+        from app.services.vectorstore import delete_vectors_by_document
+        for doc in current_user.documents:
+            delete_vectors_by_document(doc.id)
+    except Exception as e:
+        from app.core.logger import logger
+        logger.warning(f"Error removing vectors for user {user_id}: {e}")
+
+    # 2. Delete user's physical files directory
+    try:
+        import shutil
+        from app.core.config import settings
+        user_dir = settings.upload_path / str(user_id)
+        if user_dir.exists():
+            shutil.rmtree(user_dir, ignore_errors=True)
+    except Exception as e:
+        from app.core.logger import logger
+        logger.warning(f"Error removing files for user {user_id}: {e}")
+
+    # 3. Delete user from database (cascades to all user records)
+    db.delete(current_user)
+    db.commit()
+
+    from app.core.logger import logger
+    logger.info(f"User account permanently deleted: id={user_id}")
+    return {"message": "Account and all associated study data permanently deleted."}

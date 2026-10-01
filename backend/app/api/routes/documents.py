@@ -199,12 +199,16 @@ def delete_document(
         logger.warning(f"Failed to delete vectors for doc {document_id}: {e}")
 
     # Delete file from disk
-    file_path = Path(doc.file_path)
-    if file_path.exists():
-        file_path.unlink()
+    try:
+        file_path = Path(doc.file_path)
+        if file_path.exists():
+            file_path.unlink()
+    except Exception as e:
+        logger.warning(f"Failed to delete file {doc.file_path}: {e}")
 
-    # Delete from database (cascades to chunks)
+    # Delete from database (cascades to chunks and chat_documents)
     db.delete(doc)
+    db.commit()
     logger.info(f"Document deleted: id={document_id}")
     return {"message": "Document deleted successfully."}
 

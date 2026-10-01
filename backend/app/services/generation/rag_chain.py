@@ -36,6 +36,7 @@ async def rag_query(
     document_ids: list[int],
     top_k: int | None = None,
     db: Session = None,
+    user_preferences: dict | None = None,
 ) -> AsyncGenerator[dict, None]:
     """
     Execute the full RAG pipeline and yield SSE events.
@@ -44,7 +45,13 @@ async def rag_query(
         {"type": "token", "text": "..."}   — streamed answer tokens
         {"type": "sources", "sources": [...]} — citation metadata
     """
-    top_k = top_k or settings.top_k
+    prefs = user_preferences or {}
+    pref_top_k = prefs.get("top_k")
+    pref_provider = prefs.get("llm_provider")
+    pref_model = prefs.get("model_name")
+    pref_temp = prefs.get("temperature")
+
+    effective_top_k = top_k or pref_top_k or settings.top_k
 
     # ── Step 1: Load chat history ──────────────────────────────
     history = []
@@ -78,7 +85,7 @@ async def rag_query(
 
     if (history and len(history) >= 2) or (is_broad_query and doc_titles):
         try:
-            rewrite_llm = get_llm_for_rewrite()
+            rewrite_llm = get_llm_for_rewrite(provider=pref_provider, model_name=pref_model)
             rewrite_prompt = build_rewrite_prompt(history, question, doc_titles=doc_titles)
             response = rewrite_llm.invoke(rewrite_prompt)
             candidate = response.content.strip().strip('"')
@@ -114,15 +121,20 @@ async def rag_query(
 
     # ── Step 5: Rerank (optional) ──────────────────────────────
     if settings.rerank_enabled:
-        chunks = rerank_chunks(standalone_question, chunks, top_n=top_k)
+        chunks = rerank_chunks(standalone_question, chunks, top_n=effective_top_k)
     else:
-        chunks = chunks[:top_k]
+        chunks = chunks[:effective_top_k]
 
     # ── Step 6: Build prompt ───────────────────────────────────
     prompt = build_answer_prompt(chunks, standalone_question)
 
     # ── Step 7: Stream LLM response ───────────────────────────
-    llm = get_llm(streaming=True)
+    llm = get_llm(
+        streaming=True,
+        provider=pref_provider,
+        model_name=pref_model,
+        temperature=pref_temp,
+    )
 
     try:
         async for chunk in llm.astream(prompt):

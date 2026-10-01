@@ -204,6 +204,7 @@ async def ask_question(
         start_time = time.time()
         full_answer = ""
         sources_data = []
+        user_prefs = current_user.preferences or {}
 
         try:
             from app.services.generation.rag_chain import rag_query
@@ -213,8 +214,9 @@ async def ask_question(
                 chat_id=chat.id,
                 user_id=current_user.id,
                 document_ids=doc_ids,
-                top_k=body.top_k,
+                top_k=body.top_k or user_prefs.get("top_k"),
                 db=db,
+                user_preferences=user_prefs,
             ):
                 if event["type"] == "token":
                     full_answer += event["text"]
@@ -231,15 +233,18 @@ async def ask_question(
         # Calculate latency
         latency_ms = int((time.time() - start_time) * 1000)
 
-        # Save assistant message
+        # Determine model name used for message audit record
         from app.core.config import settings as app_settings
-        if app_settings.llm_provider == "groq":
+        active_provider = user_prefs.get("llm_provider") or app_settings.llm_provider
+        pref_model = user_prefs.get("model_name")
+        if pref_model:
+            model_name = pref_model
+        elif active_provider == "groq":
             model_name = app_settings.groq_model
-        elif app_settings.llm_provider == "openai":
+        elif active_provider == "openai":
             model_name = app_settings.openai_model
         else:
             model_name = app_settings.ollama_model
-
 
         assistant_msg = Message(
             chat_id=chat.id,

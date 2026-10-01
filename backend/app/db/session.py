@@ -5,7 +5,8 @@ SQLAlchemy engine and session factory.
 Supports SQLite (dev) and PostgreSQL (prod) via DATABASE_URL.
 """
 
-from sqlalchemy import create_engine
+from sqlite3 import Connection as SQLite3Connection
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
@@ -32,6 +33,15 @@ engine = create_engine(
     connect_args=connect_args,
     echo=settings.debug,
 )
+
+# Enforce foreign keys on SQLite connections
+if db_url.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        if isinstance(dbapi_connection, SQLite3Connection):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
