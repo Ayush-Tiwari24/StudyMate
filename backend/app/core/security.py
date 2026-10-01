@@ -32,26 +32,40 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+import uuid
+
 # ── JWT Tokens ──────────────────────────────────────────────────
 def create_access_token(
     data: dict, expires_delta: Optional[timedelta] = None
 ) -> str:
     """Create a short-lived JWT access token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
+    now = datetime.now(timezone.utc)
+    expire = now + (
         expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
     )
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.update({
+        "exp": expire,
+        "iat": int(now.timestamp()),
+        "jti": str(uuid.uuid4()),
+        "type": "access",
+    })
     return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
 def create_refresh_token(data: dict) -> str:
     """Create a longer-lived JWT refresh token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(
         days=settings.jwt_refresh_expire_days
     )
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({
+        "exp": expire,
+        "iat": int(now.timestamp()),
+        "jti": str(uuid.uuid4()),
+        "type": "refresh",
+    })
     return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 

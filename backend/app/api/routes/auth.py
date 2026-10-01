@@ -141,7 +141,11 @@ def refresh_tokens(body: RefreshTokenRequest, db: Session = Depends(get_db)):
     ).first()
 
     now_utc = datetime.now(timezone.utc)
-    if not record or record.revoked_at is not None or record.expires_at < now_utc:
+    expires_at = record.expires_at if record else None
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if not record or record.revoked_at is not None or (expires_at and expires_at < now_utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has expired or been revoked.",
@@ -216,6 +220,16 @@ def export_user_data(
             "documents": [{"id": d.id, "filename": d.filename} for d in chat.documents],
             "messages": msgs,
         })
+    documents_data = [
+        {
+            "id": d.id,
+            "filename": d.filename,
+            "size_bytes": d.size_bytes,
+            "status": d.status,
+            "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
+        }
+        for d in current_user.documents
+    ]
     return {
         "user": {
             "id": current_user.id,
@@ -223,6 +237,7 @@ def export_user_data(
             "email": current_user.email,
             "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
         },
+        "documents": documents_data,
         "chats": chats_data,
     }
 
