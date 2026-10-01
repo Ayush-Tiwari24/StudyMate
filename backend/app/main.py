@@ -29,9 +29,12 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     logger.info(f"Starting {settings.app_name}...")
 
-    # Create all tables (dev convenience; use Alembic in production)
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created / verified.")
+    # Create tables if enabled (dev convenience; disabled in production where Alembic runs)
+    if settings.auto_create_tables:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created / verified via Base.metadata.create_all.")
+    else:
+        logger.info("Skipping create_all (AUTO_CREATE_TABLES=False); relying on Alembic migrations.")
 
     # Ensure data directories exist
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
