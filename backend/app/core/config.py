@@ -26,7 +26,16 @@ class Settings(BaseSettings):
     db_pool_pre_ping: bool = True
 
     # ── File Storage ─────────────────────────────────────────────
+    storage_backend: str = "local"  # "local" | "s3"
     upload_dir: str = "./data/raw_pdfs"
+    s3_bucket: str = ""
+    s3_endpoint_url: str = ""
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_region: str = "us-east-1"
+
+    # ── Vector Store ─────────────────────────────────────────────
+    vector_backend: str = "chroma"  # "chroma" | "pgvector"
     vector_store_dir: str = "./data/vector_store"
     max_upload_mb: int = 50
 

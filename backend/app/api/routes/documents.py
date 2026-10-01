@@ -71,19 +71,16 @@ async def upload_document(
             detail=f"This file has already been uploaded as '{existing.filename}'.",
         )
 
-    # Save file to disk
-    user_upload_dir = ensure_dir(settings.upload_path / str(current_user.id))
-    stored_name = safe_filename(file.filename or "document.pdf")
-    file_path = user_upload_dir / stored_name
-
-    with open(file_path, "wb") as f:
-        f.write(content)
+    # Save file via storage backend (stores relative storage key)
+    from app.services.storage import get_storage
+    storage = get_storage()
+    storage_key = storage.save(current_user.id, file.filename or "document.pdf", content)
 
     # Create database record
     document = Document(
         user_id=current_user.id,
         filename=file.filename or "document.pdf",
-        file_path=str(file_path),
+        file_path=storage_key,
         file_hash=file_hash,
         size_bytes=len(content),
         status="uploaded",
@@ -163,14 +160,17 @@ def download_document(
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
-    file_path = Path(doc.file_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk.")
+    from app.services.storage import get_storage
+    from fastapi.responses import Response
+    storage = get_storage()
+    if not storage.exists(doc.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage.")
 
-    return FileResponse(
-        path=str(file_path),
-        filename=doc.filename,
+    content = storage.open(doc.file_path)
+    return Response(
+        content=content,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{doc.filename}"'},
     )
 
 
@@ -209,9 +209,9 @@ def delete_document(
 
     # 3. Delete file from storage (best-effort)
     try:
-        file_path = Path(file_path_str)
-        if file_path.exists():
-            file_path.unlink()
+        from app.services.storage import get_storage
+        storage = get_storage()
+        storage.delete(file_path_str)
     except Exception as e:
         logger.warning(f"Failed to delete file {file_path_str}: {e}")
 

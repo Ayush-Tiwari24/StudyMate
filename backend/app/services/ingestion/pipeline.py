@@ -43,26 +43,38 @@ def run_ingestion_pipeline(document_id: int) -> None:
 
         logger.info(f"Ingestion started: id={doc.id} filename={doc.filename}")
 
-        file_path = Path(doc.file_path)
-        if not file_path.exists():
-            _fail(db, doc, "File not found on disk.")
+        # ── Retrieve file from storage to temporary local file ────────
+        import tempfile
+        from app.services.storage import get_storage
+        storage = get_storage()
+        if not storage.exists(doc.file_path):
+            _fail(db, doc, f"File not found in storage: {doc.file_path}")
             return
 
-        # ── Step 1: Load PDF ────────────────────────────────────
-        pages = load_pdf(file_path)
-        doc.pages = len(pages)
-        doc.progress = 20
-        db.commit()
+        file_bytes = storage.open(doc.file_path)
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+            tmp_file.write(file_bytes)
+            tmp_path = Path(tmp_file.name)
 
-        if not pages:
-            _fail(db, doc, "No pages found in PDF.")
-            return
+        try:
+            # ── Step 1: Load PDF ────────────────────────────────────
+            pages = load_pdf(tmp_path)
+            doc.pages = len(pages)
+            doc.progress = 20
+            db.commit()
 
-        # ── Step 2: OCR fallback for scanned pages ──────────────
-        pages_needing_ocr = {p["page"] for p in pages if needs_ocr(p["text"])}
-        if pages_needing_ocr:
-            logger.info(f"{len(pages_needing_ocr)}/{len(pages)} pages appear scanned. Running in-process OCR for {doc.filename}")
-            pages = ocr_pdf_pages(file_path, pages_to_ocr=pages_needing_ocr)
+            if not pages:
+                _fail(db, doc, "No pages found in PDF.")
+                return
+
+            # ── Step 2: OCR fallback for scanned pages ──────────────
+            pages_needing_ocr = {p["page"] for p in pages if needs_ocr(p["text"])}
+            if pages_needing_ocr:
+                logger.info(f"{len(pages_needing_ocr)}/{len(pages)} pages appear scanned. Running in-process OCR for {doc.filename}")
+                pages = ocr_pdf_pages(tmp_path, pages_to_ocr=pages_needing_ocr)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
 
         # Check if we got readable text
         total_text = sum(len(p["text"]) for p in pages)
