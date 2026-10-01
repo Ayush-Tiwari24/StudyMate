@@ -49,10 +49,14 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def get_db():
     """
     FastAPI dependency that yields a database session.
-    Automatically closes the session when the request is done.
+    Automatically rolls back on exceptions and closes the session.
     """
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
+

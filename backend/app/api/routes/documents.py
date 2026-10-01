@@ -191,25 +191,29 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
-    # Delete vectors from ChromaDB
+    doc_id = doc.id
+    file_path_str = doc.file_path
+
+    # 1. Delete from database and commit first (cascades to chunks and chat_documents)
+    db.delete(doc)
+    db.commit()
+    logger.info(f"Document record deleted from SQL: id={doc_id}")
+
+    # 2. Delete vectors from ChromaDB (best-effort)
     try:
         from app.services.vectorstore import delete_vectors_by_document
-        delete_vectors_by_document(document_id)
+        delete_vectors_by_document(doc_id)
     except Exception as e:
-        logger.warning(f"Failed to delete vectors for doc {document_id}: {e}")
+        logger.warning(f"Failed to delete vectors for doc {doc_id}: {e}")
 
-    # Delete file from disk
+    # 3. Delete file from storage (best-effort)
     try:
-        file_path = Path(doc.file_path)
+        file_path = Path(file_path_str)
         if file_path.exists():
             file_path.unlink()
     except Exception as e:
-        logger.warning(f"Failed to delete file {doc.file_path}: {e}")
+        logger.warning(f"Failed to delete file {file_path_str}: {e}")
 
-    # Delete from database (cascades to chunks and chat_documents)
-    db.delete(doc)
-    db.commit()
-    logger.info(f"Document deleted: id={document_id}")
     return {"message": "Document deleted successfully."}
 
 
