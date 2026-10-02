@@ -271,9 +271,8 @@ def delete_account(
 
     # 3. Delete user's vectors from vector store (best-effort)
     try:
-        from app.services.vectorstore import delete_vectors_by_document
-        for doc_id in doc_ids:
-            delete_vectors_by_document(doc_id)
+        from app.services.vectorstore import delete_vectors_by_user
+        delete_vectors_by_user(user_id)
     except Exception as e:
         logger.warning(f"Error removing vectors for user {user_id}: {e}")
 

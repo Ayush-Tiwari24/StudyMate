@@ -29,11 +29,27 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     logger.info(f"Starting {settings.app_name}...")
 
-    # Security check: fail startup in non-debug / production mode when JWT_SECRET is default
-    if not settings.debug and settings.jwt_secret == "change-me-to-a-random-string":
+    # Security check: fail startup in production mode if insecure configurations are detected
+    if settings.environment == "production":
+        if settings.jwt_secret == "change-me-to-a-random-string" or len(settings.jwt_secret) < 32:
+            error_msg = (
+                "CRITICAL: JWT_SECRET must be at least 32 characters long and cannot be default in production. "
+                "Generate one using: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
+            logger.critical(error_msg)
+            raise RuntimeError(error_msg)
+
+        if settings.database_url.startswith("sqlite"):
+            error_msg = (
+                "CRITICAL: DATABASE_URL cannot be SQLite in production. "
+                "Please configure a production PostgreSQL / Supabase connection."
+            )
+            logger.critical(error_msg)
+            raise RuntimeError(error_msg)
+    elif not settings.debug and settings.jwt_secret == "change-me-to-a-random-string":
         error_msg = (
             "CRITICAL: JWT_SECRET is set to the default insecure placeholder. "
-            "In non-debug / production mode, you must set a secure JWT_SECRET in environment variables."
+            "In non-debug mode, you must set a secure JWT_SECRET in environment variables."
         )
         logger.critical(error_msg)
         raise RuntimeError(error_msg)
@@ -72,13 +88,14 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(asyncio.to_thread(run_ingestion_pipeline, doc_id))
         logger.info(f"Re-queued ingestion for document id={doc_id}")
 
-    # Pre-warm embedding model into RAM so user queries never wait
-    try:
-        from app.services.embeddings import get_embedding_model
-        get_embedding_model()
-        logger.info("Embedding model pre-warmed and ready.")
-    except Exception as e:
-        logger.warning(f"Could not pre-warm embedding model: {e}")
+    # Pre-warm embedding model into RAM if enabled so user queries never wait
+    if settings.prewarm_model:
+        try:
+            from app.services.embeddings import get_embedding_model
+            get_embedding_model()
+            logger.info("Embedding model pre-warmed and ready.")
+        except Exception as e:
+            logger.warning(f"Could not pre-warm embedding model: {e}")
 
     yield
 
@@ -94,14 +111,40 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── Rate Limiting ────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit])
+# ── Rate Limiting (Proxy and User Aware) ──────────────────────────
+from fastapi import Request
+
+
+def get_rate_limit_key(request: Request) -> str:
+    """
+    Extract rate limit identifier:
+    1. Authenticated user ID if present on request state
+    2. Client IP from X-Forwarded-For (first IP behind reverse proxy)
+    3. Direct client host
+    """
+    user = getattr(request.state, "user", None)
+    if user and hasattr(user, "id"):
+        return f"user:{user.id}"
+
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+        if client_ip:
+            return f"ip:{client_ip}"
+
+    if request.client and request.client.host:
+        return f"ip:{request.client.host}"
+
+    return "ip:127.0.0.1"
+
+
+limiter = Limiter(key_func=get_rate_limit_key, default_limits=[settings.rate_limit])
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 # ── CORS ─────────────────────────────────────────────────────────
-origins = list(set([
-    settings.frontend_origin,
+configured_origins = [o.strip() for o in settings.frontend_origin.split(",") if o.strip()]
+origins = list(set(configured_origins + [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
@@ -111,6 +154,7 @@ origins = list(set([
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=settings.frontend_origin_regex if settings.frontend_origin_regex else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -132,12 +176,43 @@ app.include_router(feedback_router)
 app.include_router(settings_router)
 
 
-# ── Health Check ─────────────────────────────────────────────────
+# ── Health & Readiness Probes ────────────────────────────────────
 @app.get("/api/health", tags=["Health"])
 def health_check():
-    """Health check endpoint — no auth required."""
+    """Health check endpoint with component status (no secrets)."""
+    db_status = "ok"
+    try:
+        from app.db.session import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1;"))
+    except Exception as e:
+        logger.error(f"Health check DB probe error: {e}")
+        db_status = "error"
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "ok" else "degraded",
         "app": settings.app_name,
+        "database": db_status,
+        "vector_backend": settings.vector_backend,
+        "storage_backend": settings.storage_backend,
         "llm_provider": settings.llm_provider,
     }
+
+
+@app.get("/api/health/ready", tags=["Health"])
+def readiness_check():
+    """Readiness probe for zero-downtime deployments and container health checks."""
+    from fastapi import HTTPException, status
+    try:
+        from app.db.session import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1;"))
+        return {"status": "ready"}
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        )

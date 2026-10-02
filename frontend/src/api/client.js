@@ -125,6 +125,14 @@ client.interceptors.response.use(
       errorCode = 'RATE_LIMIT';
     } else if (status === 409 && errorCode === 'DOCUMENT_NOT_READY') {
       normalizedMessage = data?.error?.message || 'This document is still being read. Please wait a moment.';
+    } else if (status === 502 || status === 503 || status === 504) {
+      normalizedMessage = 'The backend server is waking up from sleep. Please wait a moment and try again.';
+      errorCode = 'SERVER_STARTING';
+      window.dispatchEvent(
+        new CustomEvent('backend-cold-start', {
+          detail: { status, message: normalizedMessage },
+        })
+      );
     }
 
     // Attach normalised error properties

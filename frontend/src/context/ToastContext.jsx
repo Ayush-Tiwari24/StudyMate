@@ -15,6 +15,14 @@ export function ToastProvider({ children }) {
     }, durationMs);
   }, []);
 
+  React.useEffect(() => {
+    const handleColdStart = (e) => {
+      toast(e.detail?.message || 'Server is waking up. Please allow a few seconds...', 6000);
+    };
+    window.addEventListener('backend-cold-start', handleColdStart);
+    return () => window.removeEventListener('backend-cold-start', handleColdStart);
+  }, [toast]);
+
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}

@@ -47,3 +47,18 @@ def test_extract_keywords():
     assert "are" not in tokens
     assert "this" not in tokens
 
+
+def test_mmr_selection_diversifies():
+    from app.services.retrieval.retriever import _calculate_mmr
+
+    candidates = [
+        {"content": "Dijkstra algorithm finds shortest paths in a weighted graph.", "score": 0.95},
+        {"content": "Dijkstra algorithm finds shortest paths in a graph with weights.", "score": 0.94},
+        {"content": "Bellman-Ford algorithm handles graphs with negative edge weights.", "score": 0.88},
+    ]
+    selected = _calculate_mmr(candidates, top_k=2, lambda_param=0.5)
+    assert len(selected) == 2
+    assert selected[0]["content"] == candidates[0]["content"]
+    assert "Bellman-Ford" in selected[1]["content"]
+
+

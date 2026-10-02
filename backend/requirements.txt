@@ -24,4 +24,5 @@ httpx
 python-dotenv
 aiofiles
 psycopg2-binary
+pgvector
 boto3

@@ -126,12 +126,66 @@ def retrieve_chunks(
         logger.info(f"All chunks below threshold ({threshold}). Best score: {chunks[0]['score'] if chunks else 'N/A'}")
         return []
 
-    # Return top-k results
-    result = filtered[:top_k]
+    # Apply MMR if enabled to balance relevance and diversity, otherwise take top-k
+    if settings.use_mmr and len(filtered) > top_k:
+        result = _calculate_mmr(filtered, top_k=top_k)
+    else:
+        result = filtered[:top_k]
 
     logger.info(
-        f"Retrieved {len(result)} chunks (from {len(chunks)} candidates). "
+        f"Retrieved {len(result)} chunks (from {len(chunks)} candidates, MMR={settings.use_mmr}). "
         f"Scores: {[c['score'] for c in result]}"
     )
 
     return result
+
+
+def _calculate_mmr(
+    candidates: list[dict],
+    top_k: int,
+    lambda_param: float = 0.7,
+) -> list[dict]:
+    """
+    Maximal Marginal Relevance (MMR) selection to balance relevance and diversity.
+    Penalizes candidates that have high word overlap with already selected chunks.
+    """
+    if len(candidates) <= top_k:
+        return candidates
+
+    selected = [candidates[0]]
+    remaining = candidates[1:]
+
+    def get_words(text: str) -> set[str]:
+        return set(re.findall(r"[a-z0-9]{3,}", text.lower()))
+
+    selected_words = [get_words(selected[0]["content"])]
+    remaining_words = [get_words(c["content"]) for c in remaining]
+
+    while len(selected) < top_k and remaining:
+        best_idx = -1
+        best_mmr_score = float("-inf")
+
+        for idx, (cand, cand_words) in enumerate(zip(remaining, remaining_words)):
+            max_sim = 0.0
+            if cand_words:
+                for sel_w in selected_words:
+                    if sel_w:
+                        sim = len(cand_words & sel_w) / len(cand_words | sel_w)
+                        if sim > max_sim:
+                            max_sim = sim
+
+            mmr_score = (lambda_param * cand["score"]) - ((1.0 - lambda_param) * max_sim)
+
+            if mmr_score > best_mmr_score:
+                best_mmr_score = mmr_score
+                best_idx = idx
+
+        if best_idx != -1:
+            chosen = remaining.pop(best_idx)
+            chosen_w = remaining_words.pop(best_idx)
+            selected.append(chosen)
+            selected_words.append(chosen_w)
+        else:
+            break
+
+    return selected

@@ -18,6 +18,10 @@ from app.services.ingestion.cleaner import clean_pages
 from app.services.ingestion.chunker import chunk_pages
 from app.services.embeddings import embed_documents
 from app.services.vectorstore import add_chunks, delete_vectors_by_document
+import threading
+
+# Limit concurrent ingestion to 1 at a time to prevent RAM spikes on 2GB Render instance
+_INGESTION_SEMAPHORE = threading.Semaphore(1)
 
 
 def run_ingestion_pipeline(document_id: int) -> None:
@@ -26,6 +30,13 @@ def run_ingestion_pipeline(document_id: int) -> None:
     Designed to run as a FastAPI BackgroundTask.
     Uses its own DB session (not the request's session).
     """
+    logger.info(f"Ingestion task queued for document {document_id}; waiting for slot...")
+    with _INGESTION_SEMAPHORE:
+        logger.info(f"Ingestion slot acquired for document {document_id}")
+        _run_ingestion_internal(document_id)
+
+
+def _run_ingestion_internal(document_id: int) -> None:
     db = SessionLocal()
 
     try:
@@ -74,7 +85,10 @@ def run_ingestion_pipeline(document_id: int) -> None:
                 pages = ocr_pdf_pages(tmp_path, pages_to_ocr=pages_needing_ocr)
         finally:
             if tmp_path.exists():
-                tmp_path.unlink()
+                try:
+                    tmp_path.unlink()
+                except Exception as unlink_err:
+                    logger.warning(f"Could not unlink temp file {tmp_path}: {unlink_err}")
 
         # Check if we got readable text
         total_text = sum(len(p["text"]) for p in pages)

@@ -1,194 +1,211 @@
-# 📚 StudyMate RAG — Academic Question Answering System
+# 📚 StudyMate AI — Academic Question Answering System
 
 > Upload your study PDFs. Ask questions. Get cited answers.
 
-StudyMate RAG is a production-hardened web application where students upload study materials (textbooks, lecture notes, research papers) and chat with them using Retrieval-Augmented Generation. Every answer is **grounded in the uploaded documents** with **page-level citations** and full user data isolation.
+StudyMate AI is a production-hardened web application where students upload study materials (textbooks, lecture notes, research papers) and chat with them using Retrieval-Augmented Generation. Every answer is **grounded in the uploaded documents** with **page-level citations** and full user data isolation.
 
 ---
 
-## ✨ Features
+## 🏛️ System Architecture
 
-- 📄 **PDF Ingestion & OCR Fallback** — PyMuPDF high-speed parsing with automated RapidOCR fallback for scanned pages.
-- 💬 **Grounded Chat with Documents** — Conversational Q&A grounded strictly in uploaded course material.
-- 📖 **Page-Level Citations** — Clickable citations `[1] [2]` with source text snippets, page numbers, and inspection views.
-- 🔄 **Query Rewriting & MMR Search** — Multi-turn conversation resolution and Maximal Marginal Relevance to eliminate redundant passages.
-- ⚡ **Real-Time Streaming** — Server-Sent Events (SSE) streaming with low-latency token delivery and per-request LLM caching.
-- 🔐 **Multi-Tenant Security** — Complete database, vector, and file isolation per user; JWT refresh token rotation with single-use revocation.
-- ⚙️ **Customizable Preferences** — Real-time configuration of top-k retrieval depth, reading themes (Light, Night, System), font sizing, and LLM providers (Groq, OpenAI, Ollama).
-- 📦 **Multi-Tier Storage** — Decoupled storage backends (Local Disk or AWS S3/MinIO) and vector stores (ChromaDB or pgvector).
+StudyMate AI supports dual operating modes:
+1. **Local Development**: Runs out of the box with zero external cloud dependencies using SQLite, ChromaDB, and local file storage.
+2. **Online Cloud Stack**: Completely stateless production deployment with **zero data stored on the application server disk**:
+   - **Frontend**: [Vercel](https://vercel.com) (React + Vite static SPA).
+   - **Backend**: [Render](https://render.com) (FastAPI Docker web service on Standard 2 GB RAM plan in Singapore).
+   - **Relational Database**: [Supabase PostgreSQL](https://supabase.com) in `ap-south-1` (Mumbai) via transaction pooler.
+   - **Vector Database**: Supabase `pgvector` (`chunk_vectors` table with HNSW cosine index).
+   - **PDF Storage**: Supabase Storage via S3-compatible API (`studymate-pdfs` private bucket).
+   - **LLM**: [Groq Cloud](https://groq.com) (`openai/gpt-oss-120b` primary with `openai/gpt-oss-20b` fallback).
 
----
-
-## 🏛️ Storage Architecture (Three Tiers)
-
-StudyMate AI employs a 3-tier storage architecture separating relational data, high-dimensional vectors, and raw document objects:
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        StudyMate Storage Tiers                         │
-├─────────────────────┬───────────────────────┬──────────────────────────┤
-│ 1. Relational Tier  │ 2. Vector Store Tier  │ 3. Object / File Storage │
-│ (PostgreSQL/SQLite) │ (ChromaDB / pgvector) │ (AWS S3 / Local Disk)    │
-├─────────────────────┼───────────────────────┼──────────────────────────┤
-│ - Users & Settings  │ - 384-dim Embeddings  │ - Raw uploaded PDFs      │
-│ - Document metadata │ - Cosine HNSW Index   │ - User-scoped keys:      │
-│ - Chunks text & idx │ - Strict metadata     │   {user_id}/{hash}_{pdf} │
-│ - Chats & Messages  │   filtering:          │                          │
-│ - Message Sources   │   user_id & doc_id    │                          │
-│ - Refresh Tokens    │                       │                          │
-│ - User Feedback     │                       │                          │
-└─────────────────────┴───────────────────────┴──────────────────────────┘
-```
-
-See [docs/er_diagram.md](docs/er_diagram.md) for the complete Entity Relationship diagram and model lifecycle specifications.
+For architectural diagrams and database entity relationships, see:
+- [docs/architecture.md](docs/architecture.md) — Architecture diagrams and request data flows.
+- [docs/er_diagram.md](docs/er_diagram.md) — Relational schema, cascade rules, and indexes.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Step-by-Step Online Cloud Deployment
 
-### 1. Local Development with SQLite (Zero Config)
+### Step 1: Provision Supabase (Region: `ap-south-1` Mumbai)
 
-The project runs out-of-the-box with SQLite and local disk storage:
+> **Why Mumbai?** Mumbai gives the lowest latency for Indian users and Jaipur development. Both relational queries and PDF downloads benefit directly from this proximity.
+
+1. Create a new project on [Supabase](https://supabase.com).
+   - **Name**: `studymate-prod`
+   - **Region**: Select `ap-south-1` (Mumbai, India).
+   - **Database Password**: Generate and securely store a strong password.
+2. **Enable `pgvector`**:
+   - Navigate to **Database** -> **Extensions**.
+   - Search for `vector` and enable it (Alembic migration `0002_pgvector.py` will also execute `CREATE EXTENSION IF NOT EXISTS vector;`).
+3. **Configure Storage Bucket**:
+   - Navigate to **Storage** -> **New Bucket**.
+   - **Bucket Name**: `studymate-pdfs`
+   - **Access**: Set to **Private** (authenticated downloads go through the backend).
+4. **Generate S3 Credentials**:
+   - Navigate to **Project Settings** -> **Storage** -> **S3 Credentials**.
+   - Click **Generate New Credentials**. Copy the **Access Key ID** and **Secret Access Key**.
+   - The S3 endpoint URL is: `https://<project-ref>.supabase.co/storage/v1/s3`
+5. **Get Database Connection Strings**:
+   - Navigate to **Project Settings** -> **Database** -> **Connection string**:
+   - **Transaction Pooler (Port 6543)** (for `DATABASE_URL`):
+     `postgresql+psycopg2://postgres.<project-ref>:<password>@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require`
+   - **Direct / Session Connection (Port 5432)** (for `MIGRATION_DATABASE_URL`):
+     `postgresql+psycopg2://postgres.<project-ref>:<password>@aws-0-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require`
+
+---
+
+### Step 2: Deploy Backend to Render (Region: `singapore`, Plan: `Standard`)
+
+> **Why Singapore & Standard?** Render has no Mumbai region, so Singapore is the closest available region to Supabase Mumbai. The **Standard plan (2 GB RAM)** provides sufficient headroom for PyTorch and SentenceTransformer embedding models without OOM risk. Render bills per second, so you can suspend the instance after evaluations or demos to minimize cost.
+
+1. Connect your GitHub repository to [Render](https://dashboard.render.com).
+2. Click **New +** -> **Blueprint**, and select your repository. Render automatically reads [render.yaml](render.yaml).
+3. Alternatively, create a **Web Service** manually:
+   - **Runtime**: `Docker`
+   - **Docker Context**: `./backend`
+   - **DockerfilePath**: `./backend/Dockerfile`
+   - **Instance Type**: `Standard (2 GB RAM, 1 CPU)`
+   - **Region**: `Singapore`
+   - **Health Check Path**: `/api/health/ready`
+4. Set the following environment variables in the Render Dashboard:
+   ```env
+   ENVIRONMENT=production
+   DATABASE_URL=postgresql+psycopg2://postgres.<ref>:<pass>@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require
+   MIGRATION_DATABASE_URL=postgresql+psycopg2://postgres.<ref>:<pass>@aws-0-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require
+   RUN_MIGRATIONS_ON_START=true
+   AUTO_CREATE_TABLES=false
+   VECTOR_BACKEND=pgvector
+   STORAGE_BACKEND=s3
+   S3_BUCKET=studymate-pdfs
+   S3_ENDPOINT_URL=https://<ref>.supabase.co/storage/v1/s3
+   S3_ACCESS_KEY=<Supabase S3 Access Key>
+   S3_SECRET_KEY=<Supabase S3 Secret Key>
+   S3_REGION=ap-south-1
+   LLM_PROVIDER=groq
+   GROQ_API_KEY=gsk_...
+   GROQ_MODEL=openai/gpt-oss-120b
+   GROQ_FALLBACK_MODEL=openai/gpt-oss-20b
+   TORCH_NUM_THREADS=2
+   PREWARM_MODEL=true
+   FRONTEND_ORIGIN=https://studymate.vercel.app
+   FRONTEND_ORIGIN_REGEX=^https:\/\/studymate-.*\.vercel\.app$
+   ```
+5. Deploy the service. The startup command will automatically run `alembic upgrade head` and launch uvicorn.
+
+---
+
+### Step 3: Deploy Frontend to Vercel
+
+1. Import your GitHub repository into [Vercel](https://vercel.com).
+2. Configure project settings:
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+3. Add Environment Variable:
+   - `VITE_API_URL`: Your Render backend URL (e.g., `https://studymate-api.onrender.com`)
+   - `VITE_USE_MOCK`: `false`
+4. Click **Deploy**. Vercel uses `frontend/vercel.json` to handle SPA routing and immutable caching.
+
+---
+
+### Step 4: Post-Deployment Smoke Test Checklist
+
+Once deployed, verify full end-to-end functionality:
+
+- [ ] **Health & Readiness**:
+  - `GET https://<render-url>/api/health` returns `{"status": "healthy", "database": "ok", "vector_backend": "pgvector", "storage_backend": "s3"}`.
+  - `GET https://<render-url>/api/health/ready` returns `{"status": "ready"}`.
+- [ ] **User Registration**: Register a new student account at `https://<vercel-url>/register`.
+- [ ] **PDF Upload & Ingestion**:
+  - Upload a course PDF.
+  - Check the Supabase Storage dashboard: verify the PDF file is present in `studymate-pdfs`.
+  - Check Supabase Database: verify rows exist in `documents`, `chunks`, and `chunk_vectors`.
+  - Status updates to `ready` (100%).
+- [ ] **Academic Chat & Citations**:
+  - Ask a question specific to the uploaded material.
+  - Verify SSE answer streams smoothly.
+  - Verify that only cited sources `[1]`, `[2]` appear in the citation drawer.
+  - Click a citation: verify snippet, page number, and PDF preview work.
+- [ ] **Account Cleanup**: Delete the test user and verify that all documents, vectors, and S3 files are automatically purged.
+
+---
+
+## 💻 Local Development
+
+Run locally with SQLite, ChromaDB, and local file storage:
 
 ```bash
-# Clone and enter directory
-cd BookWorm.ai
-
-# Copy environment template
-cp .env.example .env
-
-# Backend setup
+# 1. Setup backend
 cd backend
 python -m venv venv
 venv\Scripts\activate      # Windows
 # source venv/bin/activate # Linux / macOS
 
 pip install -r requirements.txt
-
-# Run migrations (or let auto_create_tables handle dev)
 alembic upgrade head
-
-# Start API server
 uvicorn app.main:app --reload --port 8000
 ```
 
-In a separate terminal, launch the frontend:
-
+In another terminal, start the frontend:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-- Web UI: http://localhost:5173
-- Swagger API Docs: http://localhost:8000/docs
+- Web UI: `http://localhost:5173`
+- API Docs: `http://localhost:8000/docs`
 
 ---
 
-### 2. Production Setup with PostgreSQL & Docker Compose
+## 🗄️ Database Migrations & Vector Utilities
 
-Deploy the complete stack (PostgreSQL 16, FastAPI backend with pre-cached embeddings, and Nginx-powered frontend):
-
-```bash
-# 1. Configure production environment
-cp .env.example .env
-# Edit .env: Set a secure JWT_SECRET and add your GROQ_API_KEY or OPENAI_API_KEY
-
-# 2. Start services in background
-docker-compose up -d --build
-
-# 3. Check logs
-docker-compose logs -f backend
-```
-
-- Frontend & API Reverse Proxy: http://localhost (port 80)
-- Backend Direct: http://localhost:8000
-- PostgreSQL: `localhost:5432` (`studymate`)
-
----
-
-## 🗄️ Database Migrations (Alembic)
-
-Alembic manages schema evolution. Run all migration commands inside the `backend/` directory:
-
+### Running Migrations
 ```bash
 cd backend
-
-# Create a new automatic schema migration from models
-alembic revision --autogenerate -m "add new column or table"
-
-# Apply pending migrations to the latest revision
-alembic upgrade head
-
-# Roll back the previous migration step
-alembic downgrade -1
-
-# Roll back all migrations to clean base
-alembic downgrade base
-
-# Verify database schema is in sync with models
-alembic check
+alembic upgrade head      # Apply all pending migrations
+alembic downgrade -1      # Roll back last migration
 ```
 
----
+### Migrating Existing ChromaDB Vectors to pgvector
+If migrating an existing local development deployment to Supabase pgvector:
+```bash
+cd backend
+# Dry run first to verify counts
+python scripts/migrate_chroma_to_pgvector.py --dry-run
 
-## 🛠️ Operational Runbooks
+# Run migration
+python scripts/migrate_chroma_to_pgvector.py
+```
 
-### 1. Vector Store Reindexing (`scripts/reindex.py`)
-If you switch embedding models or need to re-populate the vector database from relational SQL truth:
-
+### Reindexing Vectors from Relational Data
 ```bash
 cd backend
 python scripts/reindex.py
 ```
-*Queries all chunks from the SQL database, re-computes embeddings, and rebuilds the Chroma collection.*
-
-### 2. Orphan Cleanup (`scripts/cleanup_orphans.py`)
-Purges files from disk/S3 that have no corresponding row in `documents`, and removes vectors from Chroma that have no corresponding row in `chunks`:
-
-```bash
-cd backend
-python scripts/cleanup_orphans.py
-```
-
-### 3. Backup Strategy
-- **Relational Metadata**:
-  ```bash
-  docker exec -t studymate-postgres pg_dump -U postgres studymate > backup_$(date +%F).sql
-  ```
-- **Raw PDFs**: Mirror the S3 bucket (`aws s3 sync s3://bucket ./backup/pdfs`) or snapshot the `app_data` named Docker volume.
-- **ChromaDB**: Snapshot the `/app/data/vector_store` directory or recover at any time by running `scripts/reindex.py`.
 
 ---
 
-## 🛡️ Production Deployment Checklist
+## 🧪 Testing
 
-Before taking the application live, ensure:
-
-- [ ] **`JWT_SECRET`**: Set to a cryptographically secure random string (minimum 32 characters, e.g., `python -c "import secrets; print(secrets.token_urlsafe(32))"`). The application will fail startup in production (`DEBUG=false`) if the default placeholder is detected.
-- [ ] **`DATABASE_URL`**: Pointed to a PostgreSQL cluster (`postgresql+psycopg2://user:pass@host:5432/dbname`).
-- [ ] **`AUTO_CREATE_TABLES`**: Set to `false` in production.
-- [ ] **Migrations**: Execute `alembic upgrade head` before serving user traffic.
-- [ ] **Embedding Pre-download**: Verify the Docker image was built with embedding models pre-cached so cold-start requests do not time out.
-- [ ] **CORS `FRONTEND_ORIGIN`**: Configured to your production domain (e.g. `https://studymate.yourdomain.com`).
-- [ ] **Storage Backend**: Use `STORAGE_BACKEND=s3` with AWS S3 / MinIO / Cloudflare R2 for multi-node deployments.
-- [ ] **Nginx Reverse Proxy**: Verify `proxy_buffering off;` and `proxy_read_timeout 300s;` are configured on the `/api/` location block to support SSE streaming.
-
----
-
-## 🧪 Running the Test Suite
-
-Execute the comprehensive test suite covering foreign keys, cascades, migrations, JWT rotation, user isolation, and multi-store deletion:
+Run the automated test suite (58+ tests covering security, rate limiting, S3 storage, pgvector, and cascades):
 
 ```bash
 cd backend
-pytest tests/ -v
+pytest -v
 ```
 
-All 42 test cases execute against isolated SQLite test databases and persistent Chroma test collections.
+---
+
+## 💰 Cost Control Tips (Render & Supabase)
+
+- **Render Suspends**: Render bills per second for Standard instances. If you are conducting a demo or university evaluation, keep the service active. When not in use, click **Suspend** in the Render dashboard to pause billing.
+- **Supabase Free Tier**: Free tier includes 500 MB database storage and 1 GB file storage, which holds roughly 100 textbooks and their vector embeddings.
+- **Groq Free & Tier 1**: Groq provides fast, free LPU inferences for `openai/gpt-oss-120b` and `openai/gpt-oss-20b`.
 
 ---
 
 ## 📝 License
 
-Distributed under the MIT License. Built for academic research and collaborative study.
+Distributed under the MIT License. Built for academic study, research, and collaborative learning.

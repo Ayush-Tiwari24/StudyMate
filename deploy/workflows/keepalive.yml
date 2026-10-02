@@ -1,0 +1,23 @@
+name: Backend Health Keepalive
+
+on:
+  schedule:
+    # Run every 14 minutes to prevent Render free-tier cold starts or verify service uptime
+    - cron: "*/14 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping Health Endpoint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Service
+        env:
+          SERVICE_URL: ${{ secrets.BACKEND_SERVICE_URL }}
+        run: |
+          if [ -n "$SERVICE_URL" ]; then
+            echo "Pinging health endpoint: ${SERVICE_URL}/api/health/ready"
+            curl -fsS -m 30 "${SERVICE_URL}/api/health/ready" || echo "Ping failed or timed out"
+          else
+            echo "BACKEND_SERVICE_URL secret not set. Skipping ping."
+          fi

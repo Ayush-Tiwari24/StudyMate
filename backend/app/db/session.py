@@ -2,24 +2,64 @@
 StudyMate RAG — Database Session
 
 SQLAlchemy engine and session factory.
-Supports SQLite (dev) and PostgreSQL (prod) via DATABASE_URL.
+Supports:
+- SQLite (local development default)
+- PostgreSQL (production online stack with Supabase / pooler)
 """
 
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from sqlite3 import Connection as SQLite3Connection
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
+from app.core.logger import logger
 
-from pathlib import Path
 
-db_url = settings.database_url
+def normalize_database_url(raw_url: str) -> str:
+    """
+    Normalise database URL:
+    - Replace postgres:// or plain postgresql:// with postgresql+psycopg2://
+    - Enforce sslmode=require for non-local PostgreSQL hosts (e.g. Supabase, Render)
+    """
+    if not raw_url:
+        return raw_url
 
-# Normalise postgres:// or plain postgresql:// to postgresql+psycopg2://
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
-elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
-    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    url = raw_url.strip()
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+    # If it is PostgreSQL, check whether host is remote and enforce sslmode=require
+    if url.startswith("postgresql"):
+        try:
+            parsed = urlparse(url)
+            hostname = (parsed.hostname or "").lower()
+            local_hosts = {"localhost", "127.0.0.1", "0.0.0.0", "postgres", "test-postgres", ""}
+
+            if hostname not in local_hosts:
+                query_params = parse_qs(parsed.query)
+                if "sslmode" not in query_params:
+                    query_params["sslmode"] = ["require"]
+                    new_query = urlencode(query_params, doseq=True)
+                    url = urlunparse((
+                        parsed.scheme,
+                        parsed.netloc,
+                        parsed.path,
+                        parsed.params,
+                        new_query,
+                        parsed.fragment,
+                    ))
+        except Exception as e:
+            logger.warning(f"Could not parse database URL for SSL verification: {e}")
+
+    return url
+
+
+db_url = normalize_database_url(settings.database_url)
 
 engine_kwargs = {
     "echo": settings.debug,
@@ -38,7 +78,8 @@ if db_url.startswith("sqlite"):
         db_path.parent.mkdir(parents=True, exist_ok=True)
     engine_kwargs["connect_args"] = connect_args
 else:
-    # PostgreSQL / production pool settings
+    # PostgreSQL / Supabase pooler settings
+    # Small pool_size (5) + max_overflow (5) + pool_recycle (300) avoids pooler port exhaustion
     engine_kwargs["pool_pre_ping"] = settings.db_pool_pre_ping
     engine_kwargs["pool_size"] = settings.db_pool_size
     engine_kwargs["max_overflow"] = settings.db_max_overflow
@@ -76,4 +117,3 @@ def get_db():
         raise
     finally:
         db.close()
-

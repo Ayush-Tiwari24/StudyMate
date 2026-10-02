@@ -23,6 +23,7 @@ def load_pdf(file_path: str | Path) -> list[dict]:
     file_path = Path(file_path)
     pages = []
 
+    doc = None
     try:
         doc = fitz.open(str(file_path))
 
@@ -35,12 +36,17 @@ def load_pdf(file_path: str | Path) -> list[dict]:
                 "text": text.strip(),
             })
 
-        doc.close()
         logger.info(f"Loaded PDF: {file_path.name} — {len(pages)} pages")
 
     except Exception as e:
         logger.error(f"Failed to load PDF {file_path}: {e}")
         raise
+    finally:
+        if doc is not None:
+            try:
+                doc.close()
+            except Exception:
+                pass
 
     return pages
 

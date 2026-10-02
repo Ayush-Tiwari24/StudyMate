@@ -14,7 +14,7 @@ import json
 import time
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -169,6 +169,7 @@ def get_chat(
 async def ask_question(
     chat_id: int,
     body: AskRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -206,6 +207,9 @@ async def ask_question(
         sources_data = []
         user_prefs = current_user.preferences or {}
 
+        # Send initial keep-alive comment so proxy buffers are flushed immediately
+        yield ": ready\n\n"
+
         try:
             from app.services.generation.rag_chain import rag_query
 
@@ -218,6 +222,10 @@ async def ask_question(
                 db=db,
                 user_preferences=user_prefs,
             ):
+                if await request.is_disconnected():
+                    logger.info(f"Client disconnected from SSE stream for chat {chat.id}")
+                    return
+
                 if event["type"] == "token":
                     full_answer += event["text"]
                     yield f"event: token\ndata: {json.dumps({'text': event['text']})}\n\n"

@@ -161,16 +161,25 @@ def download_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
     from app.services.storage import get_storage
-    from fastapi.responses import Response
+    from fastapi.responses import StreamingResponse
+    import io
+
     storage = get_storage()
     if not storage.exists(doc.file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage.")
 
-    content = storage.open(doc.file_path)
-    return Response(
-        content=content,
+    if hasattr(storage, "open_stream"):
+        stream = storage.open_stream(doc.file_path)
+    else:
+        stream = io.BytesIO(storage.open(doc.file_path))
+
+    return StreamingResponse(
+        stream,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{doc.filename}"'},
+        headers={
+            "Content-Type": "application/pdf",
+            "Content-Disposition": f'inline; filename="{doc.filename}"',
+        },
     )
 
 

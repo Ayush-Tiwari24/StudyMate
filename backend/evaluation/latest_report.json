@@ -1,0 +1,102 @@
+{
+  "model": "openai/gpt-oss-120b",
+  "fallback_model": "openai/gpt-oss-20b",
+  "timestamp": 1790930868.233053,
+  "metrics": {
+    "avg_semantic_score": 0.7181,
+    "avg_word_overlap": 0.168,
+    "total_samples": 10
+  },
+  "details": [
+    {
+      "id": 1,
+      "topic": "Databases",
+      "question": "What is normalization in relational databases?",
+      "ground_truth": "Normalization is the process of organizing tables to reduce data redundancy and improve data integrity through normal forms like 1NF, 2NF, 3NF, and BCNF.",
+      "semantic_score": 0.7702,
+      "word_overlap": 0.0455,
+      "latency_ms": 10619.47
+    },
+    {
+      "id": 2,
+      "topic": "Databases",
+      "question": "What are ACID properties in database transaction management?",
+      "ground_truth": "ACID stands for Atomicity, Consistency, Isolation, and Durability, which are the four core properties guaranteeing reliable transaction processing.",
+      "semantic_score": 0.7074,
+      "word_overlap": 0.1905,
+      "latency_ms": 20.73
+    },
+    {
+      "id": 3,
+      "topic": "Algorithms",
+      "question": "How does Dijkstra's algorithm find the shortest path?",
+      "ground_truth": "Dijkstra's algorithm uses a priority queue to iteratively select the unvisited vertex with the minimum tentative distance, relaxing all outgoing edges, and guaranteed optimal for non-negative edge weights.",
+      "semantic_score": 0.6467,
+      "word_overlap": 0.0968,
+      "latency_ms": 23.36
+    },
+    {
+      "id": 4,
+      "topic": "Algorithms",
+      "question": "What is the difference between Prim's and Kruskal's algorithm?",
+      "ground_truth": "Prim's algorithm grows a single minimum spanning tree from an arbitrary starting vertex by adding the cheapest connecting edge, whereas Kruskal's algorithm sorts all edges globally and adds them greedily avoiding cycles using Disjoint Set Union (Union-Find).",
+      "semantic_score": 0.728,
+      "word_overlap": 0.1389,
+      "latency_ms": 27.51
+    },
+    {
+      "id": 5,
+      "topic": "Operating Systems",
+      "question": "Explain virtual memory and page tables in modern operating systems.",
+      "ground_truth": "Virtual memory provides an abstraction of contiguous memory per process mapped to physical frames via multi-level page tables and hardware MMU, supporting demand paging, isolation, and swap space.",
+      "semantic_score": 0.7942,
+      "word_overlap": 0.1786,
+      "latency_ms": 22.8
+    },
+    {
+      "id": 6,
+      "topic": "Operating Systems",
+      "question": "What are the four necessary conditions for deadlock to occur?",
+      "ground_truth": "The four Coffman conditions for deadlock are Mutual Exclusion, Hold and Wait, No Preemption, and Circular Wait.",
+      "semantic_score": 0.8009,
+      "word_overlap": 0.3529,
+      "latency_ms": 23.09
+    },
+    {
+      "id": 7,
+      "topic": "Computer Networks",
+      "question": "How does the TCP three-way handshake establish a connection?",
+      "ground_truth": "The client sends a SYN segment with an initial sequence number, the server responds with a SYN-ACK acknowledging the sequence number, and the client replies with an ACK, establishing a synchronized full-duplex TCP connection.",
+      "semantic_score": 0.5086,
+      "word_overlap": 0.1111,
+      "latency_ms": 23.03
+    },
+    {
+      "id": 8,
+      "topic": "Computer Networks",
+      "question": "What is the function of the Transport Layer in the OSI model?",
+      "ground_truth": "The Transport Layer is responsible for end-to-end communication, process-to-process delivery, flow control, error checking, and segmentation via protocols such as TCP and UDP.",
+      "semantic_score": 0.6455,
+      "word_overlap": 0.125,
+      "latency_ms": 23.4
+    },
+    {
+      "id": 9,
+      "topic": "Algorithms",
+      "question": "What is the time complexity of QuickSort in the average and worst cases?",
+      "ground_truth": "QuickSort runs in O(n log n) time on average and O(n^2) time in the worst case when unbalanced partitions occur repeatedly.",
+      "semantic_score": 0.7517,
+      "word_overlap": 0.3529,
+      "latency_ms": 23.49
+    },
+    {
+      "id": 10,
+      "topic": "Databases",
+      "question": "What is the purpose of an index in SQL and how does a B-Tree index work?",
+      "ground_truth": "An index accelerates record retrieval without full table scans. A B-Tree index keeps keys sorted in a balanced tree structure where root, internal, and leaf nodes allow search, insertion, and range queries in O(log n) time.",
+      "semantic_score": 0.8277,
+      "word_overlap": 0.0882,
+      "latency_ms": 25.24
+    }
+  ]
+}

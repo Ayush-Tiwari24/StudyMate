@@ -16,10 +16,13 @@ class Settings(BaseSettings):
     # ── Application ──────────────────────────────────────────────
     app_name: str = "StudyMate RAG"
     debug: bool = False
+    environment: str = "development"  # "development" | "production" | "test"
 
     # ── Database ─────────────────────────────────────────────────
     database_url: str = "sqlite:///./data/app.db"
+    migration_database_url: str = ""  # Direct connection URL for Alembic when using Supabase pooler
     auto_create_tables: bool = True
+    run_migrations_on_start: bool = True
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_recycle: int = 1800
@@ -37,6 +40,8 @@ class Settings(BaseSettings):
     # ── Vector Store ─────────────────────────────────────────────
     vector_backend: str = "chroma"  # "chroma" | "pgvector"
     vector_store_dir: str = "./data/vector_store"
+    embedding_dim: int = 384
+    hnsw_ef_search: int = 40
     max_upload_mb: int = 50
 
     # ── JWT Auth ─────────────────────────────────────────────────
@@ -47,6 +52,7 @@ class Settings(BaseSettings):
 
     # ── CORS ─────────────────────────────────────────────────────
     frontend_origin: str = "http://localhost:5173"
+    frontend_origin_regex: str = ""  # Optional regex, e.g. ^https://studymate-.*\.vercel\.app$
 
     # ── LLM Provider ────────────────────────────────────────────
     llm_provider: str = "groq"  # "groq" | "openai" | "ollama"
@@ -54,12 +60,15 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
+    groq_fallback_model: str = "openai/gpt-oss-20b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2:3b"
 
-    # ── Embeddings ───────────────────────────────────────────────
+    # ── Embeddings & Computation ─────────────────────────────────
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    prewarm_model: bool = True
+    torch_num_threads: int = 2
 
     # ── Chunking ─────────────────────────────────────────────────
     chunk_size: int = 900

@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────
+# Docker Compose Override Example — Local MinIO & pgvector Parity
+# ─────────────────────────────────────────────────────────────────
+# Copy this file to docker-compose.override.yml to test the full online
+# stack locally with pgvector and S3-compatible MinIO object storage.
+# ─────────────────────────────────────────────────────────────────
+
+version: "3.8"
+
+services:
+  # Local S3-compatible storage for testing S3Storage locally
+  minio:
+    image: minio/minio:latest
+    container_name: studymate-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  backend:
+    environment:
+      STORAGE_BACKEND: s3
+      S3_BUCKET: studymate-local
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadminpassword
+      S3_REGION: us-east-1
+      VECTOR_BACKEND: pgvector
+    depends_on:
+      - postgres
+      - minio
+
+volumes:
+  minio_data:

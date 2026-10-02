@@ -42,6 +42,11 @@ class BaseStorage(ABC):
         pass
 
     @abstractmethod
+    def open_stream(self, key: str):
+        """Return a readable binary stream for the given storage key."""
+        pass
+
+    @abstractmethod
     def delete(self, key: str) -> None:
         """Delete the file matching the storage key."""
         pass
@@ -91,6 +96,12 @@ class LocalStorage(BaseStorage):
         with open(path, "rb") as f:
             return f.read()
 
+    def open_stream(self, key: str):
+        path = self._resolve(key)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {key}")
+        return open(path, "rb")
+
     def delete(self, key: str) -> None:
         path = self._resolve(key)
         if path.exists():
@@ -108,7 +119,7 @@ class LocalStorage(BaseStorage):
 
 
 class S3Storage(BaseStorage):
-    """S3-compatible object storage backend."""
+    """S3-compatible object storage backend (AWS S3, Supabase Storage, Cloudflare R2)."""
 
     def __init__(self):
         import boto3
@@ -117,17 +128,20 @@ class S3Storage(BaseStorage):
         session = boto3.session.Session()
         client_kwargs = {
             "service_name": "s3",
-            "region_name": settings.s3_region or "us-east-1",
+            "region_name": settings.s3_region or "ap-south-1",
             "aws_access_key_id": settings.s3_access_key,
             "aws_secret_access_key": settings.s3_secret_key,
-            "config": Config(s3={"addressing_style": "path"}),
+            "config": Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+            ),
         }
         if settings.s3_endpoint_url:
             client_kwargs["endpoint_url"] = settings.s3_endpoint_url
 
         self.s3 = session.client(**client_kwargs)
         self.bucket = settings.s3_bucket
-        logger.info(f"Initialized S3Storage with bucket: {self.bucket}")
+        logger.info(f"Initialized S3Storage with bucket: {self.bucket} (region: {client_kwargs['region_name']})")
 
     def save(self, user_id: int, filename: str, content: bytes) -> str:
         clean_name = safe_filename(filename)
@@ -144,6 +158,10 @@ class S3Storage(BaseStorage):
     def open(self, key: str) -> bytes:
         response = self.s3.get_object(Bucket=self.bucket, Key=key)
         return response["Body"].read()
+
+    def open_stream(self, key: str):
+        response = self.s3.get_object(Bucket=self.bucket, Key=key)
+        return response["Body"]
 
     def delete(self, key: str) -> None:
         self.s3.delete_object(Bucket=self.bucket, Key=key)

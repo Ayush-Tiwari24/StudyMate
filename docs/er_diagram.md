@@ -157,3 +157,15 @@ erDiagram
 - **Role**: User quality evaluations (thumbs up / thumbs down) for assistant responses.
 - **Constraints**: `message_id` is unique (`OneToOne` with assistant messages) with `value` restricted to `+1` or `-1`.
 - **Lifecycle**: Submitted via `/api/messages/{id}/feedback`. Cascades on message or user deletion.
+
+### 10. `chunk_vectors` (PostgreSQL / Supabase + pgvector)
+- **Role**: Production vector embeddings table replacing ChromaDB on PostgreSQL.
+- **Columns**: `id` (PK, string chunk ID), `embedding` (vector(384)), `user_id` (FK to users.id with CASCADE), `document_id` (FK to documents.id with CASCADE), `metadata` (JSONB containing filename, page, tokens, and chunk_index), `created_at` (timestamptz).
+- **Indexes**:
+  - HNSW index on `embedding vector_cosine_ops` (`m=16, ef_construction=64`) for ultra-fast approximate nearest neighbor search.
+  - Btree index on `(user_id, document_id)` for tenant isolation and filtered retrieval.
+
+### 11. `vector_meta` (PostgreSQL / Supabase)
+- **Role**: Tracks vector schema metadata, active embedding model name, and dimensions to prevent model mismatch.
+- **Columns**: `key` (PK, string), `value` (text), `updated_at` (timestamptz).
+

@@ -1,12 +1,62 @@
 [
   {
-    "question": "What is normalization in databases?",
-    "ground_truth": "Normalization is the process of organizing tables to reduce redundancy and improve data integrity through normal forms (1NF, 2NF, 3NF, BCNF).",
-    "document": "sample.pdf"
+    "question": "What is normalization in relational databases?",
+    "ground_truth": "Normalization is the process of organizing tables to reduce data redundancy and improve data integrity through normal forms like 1NF, 2NF, 3NF, and BCNF.",
+    "document": "dbms_fundamentals.pdf",
+    "topic": "Databases"
   },
   {
-    "question": "What are ACID properties?",
-    "ground_truth": "ACID stands for Atomicity, Consistency, Isolation, and Durability - the four properties that guarantee reliable database transactions.",
-    "document": "sample.pdf"
+    "question": "What are ACID properties in database transaction management?",
+    "ground_truth": "ACID stands for Atomicity, Consistency, Isolation, and Durability, which are the four core properties guaranteeing reliable transaction processing.",
+    "document": "dbms_fundamentals.pdf",
+    "topic": "Databases"
+  },
+  {
+    "question": "How does Dijkstra's algorithm find the shortest path?",
+    "ground_truth": "Dijkstra's algorithm uses a priority queue to iteratively select the unvisited vertex with the minimum tentative distance, relaxing all outgoing edges, and guaranteed optimal for non-negative edge weights.",
+    "document": "algorithms_and_complexity.pdf",
+    "topic": "Algorithms"
+  },
+  {
+    "question": "What is the difference between Prim's and Kruskal's algorithm?",
+    "ground_truth": "Prim's algorithm grows a single minimum spanning tree from an arbitrary starting vertex by adding the cheapest connecting edge, whereas Kruskal's algorithm sorts all edges globally and adds them greedily avoiding cycles using Disjoint Set Union (Union-Find).",
+    "document": "algorithms_and_complexity.pdf",
+    "topic": "Algorithms"
+  },
+  {
+    "question": "Explain virtual memory and page tables in modern operating systems.",
+    "ground_truth": "Virtual memory provides an abstraction of contiguous memory per process mapped to physical frames via multi-level page tables and hardware MMU, supporting demand paging, isolation, and swap space.",
+    "document": "operating_systems.pdf",
+    "topic": "Operating Systems"
+  },
+  {
+    "question": "What are the four necessary conditions for deadlock to occur?",
+    "ground_truth": "The four Coffman conditions for deadlock are Mutual Exclusion, Hold and Wait, No Preemption, and Circular Wait.",
+    "document": "operating_systems.pdf",
+    "topic": "Operating Systems"
+  },
+  {
+    "question": "How does the TCP three-way handshake establish a connection?",
+    "ground_truth": "The client sends a SYN segment with an initial sequence number, the server responds with a SYN-ACK acknowledging the sequence number, and the client replies with an ACK, establishing a synchronized full-duplex TCP connection.",
+    "document": "computer_networks.pdf",
+    "topic": "Computer Networks"
+  },
+  {
+    "question": "What is the function of the Transport Layer in the OSI model?",
+    "ground_truth": "The Transport Layer is responsible for end-to-end communication, process-to-process delivery, flow control, error checking, and segmentation via protocols such as TCP and UDP.",
+    "document": "computer_networks.pdf",
+    "topic": "Computer Networks"
+  },
+  {
+    "question": "What is the time complexity of QuickSort in the average and worst cases?",
+    "ground_truth": "QuickSort runs in O(n log n) time on average and O(n^2) time in the worst case when unbalanced partitions occur repeatedly.",
+    "document": "algorithms_and_complexity.pdf",
+    "topic": "Algorithms"
+  },
+  {
+    "question": "What is the purpose of an index in SQL and how does a B-Tree index work?",
+    "ground_truth": "An index accelerates record retrieval without full table scans. A B-Tree index keeps keys sorted in a balanced tree structure where root, internal, and leaf nodes allow search, insertion, and range queries in O(log n) time.",
+    "document": "dbms_fundamentals.pdf",
+    "topic": "Databases"
   }
 ]
