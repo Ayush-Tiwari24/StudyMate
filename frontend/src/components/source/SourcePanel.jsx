@@ -10,9 +10,14 @@ export default function SourcePanel({
   activeCitationIndex = 1,
   onSelectCitation,
   query = '',
+  className = '',
+  isExpanded,
+  onToggleExpand,
 }) {
   const [currentIndex, setCurrentIndex] = useState(activeCitationIndex || 1);
   const [fullPage, setFullPage] = useState(false);
+  const isFull = isExpanded !== undefined ? isExpanded : fullPage;
+  const toggleFull = onToggleExpand || (() => setFullPage((prev) => !prev));
 
   useEffect(() => {
     if (activeCitationIndex && activeCitationIndex >= 1 && activeCitationIndex <= (sources.length || 1)) {
@@ -36,7 +41,9 @@ export default function SourcePanel({
   if (!isOpen || sources.length === 0) {
     return (
       <aside
-        className="w-96 bg-[var(--surface)] border-l border-[var(--line)] flex flex-col h-full overflow-hidden select-none transition-all duration-150 ease-out"
+        className={`w-full bg-[var(--surface)] border-l border-[var(--line)] flex flex-col h-full overflow-hidden select-none transition-all duration-150 ease-out ${
+          !className ? 'md:w-96' : ''
+        } ${className}`}
         style={{ display: isOpen ? 'flex' : 'none' }}
       >
         <div className="p-3.5 border-b border-[var(--line)] flex items-center justify-between">
@@ -68,9 +75,9 @@ export default function SourcePanel({
 
   return (
     <aside
-      className={`${
-        fullPage ? 'w-full md:w-[680px]' : 'w-96'
-      } bg-[var(--surface)] border-l border-[var(--line)] flex flex-col h-full overflow-hidden select-none transition-all duration-150 ease-out z-20`}
+      className={`w-full bg-[var(--surface)] border-l border-[var(--line)] flex flex-col h-full overflow-hidden select-none transition-all duration-150 ease-out z-20 ${
+        !className ? (isFull ? 'md:w-[680px]' : 'md:w-96') : ''
+      } ${className}`}
       aria-label="Evidence and source page"
     >
       {/* Header: Mono file label + page */}
@@ -84,11 +91,11 @@ export default function SourcePanel({
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setFullPage(!fullPage)}
+            onClick={toggleFull}
             className="p-1 rounded text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-hover)]"
-            title={fullPage ? 'Standard width' : 'Expand full page'}
+            title={isFull ? 'Standard width' : 'Expand full page'}
           >
-            {fullPage ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {isFull ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           </button>
 
           {onClose && (

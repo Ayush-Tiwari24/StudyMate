@@ -17,7 +17,7 @@ export default function Shelf({
 
   return (
     <aside
-      className={`w-72 bg-[var(--surface-muted)] border-r border-[var(--line)] flex flex-col h-full overflow-hidden select-none ${className}`}
+      className={`w-full bg-[var(--surface-muted)] border-r border-[var(--line)] flex flex-col h-full overflow-hidden select-none ${className}`}
       aria-label="The Shelf"
     >
       {/* Header */}

@@ -14,6 +14,7 @@ import { listChats, getChat, createChat } from '../api/chat';
 import { PanelLeft, PanelLeftClose, HelpCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useResizableSidebar } from '../hooks/useResizableSidebar';
 
 export default function Chat() {
   const { chatId } = useParams();
@@ -31,6 +32,49 @@ export default function Chat() {
   const [activeSources, setActiveSources] = useState([]);
   const [activeCitationIndex, setActiveCitationIndex] = useState(1);
   const [lastQuery, setLastQuery] = useState('');
+  const [isSourceExpanded, setIsSourceExpanded] = useState(false);
+  const prevSourceWidthRef = useRef(384);
+
+  // Resizable sidebars
+  const {
+    width: shelfWidth,
+    setWidth: setShelfWidth,
+    isDragging: isDraggingShelf,
+    startResize: startShelfResize,
+    resetWidth: resetShelfWidth,
+  } = useResizableSidebar({
+    initialWidth: 288,
+    minWidth: 200,
+    maxWidth: () => Math.min(520, Math.floor(window.innerWidth - (sourcePanelOpen ? sourceWidth : 0) - 380)),
+    storageKey: 'studymate_shelf_width',
+    direction: 'left',
+  });
+
+  const {
+    width: sourceWidth,
+    setWidth: setSourceWidth,
+    isDragging: isDraggingSource,
+    startResize: startSourceResize,
+    resetWidth: resetSourceWidth,
+  } = useResizableSidebar({
+    initialWidth: 384,
+    minWidth: 280,
+    maxWidth: () => Math.min(800, Math.floor(window.innerWidth - (shelfOpen ? shelfWidth : 0) - 380)),
+    storageKey: 'studymate_source_width',
+    direction: 'right',
+  });
+
+  const handleToggleSourceExpand = () => {
+    if (isSourceExpanded) {
+      setSourceWidth(prevSourceWidthRef.current || 384);
+      setIsSourceExpanded(false);
+    } else {
+      prevSourceWidthRef.current = sourceWidth;
+      const targetExpanded = Math.min(800, Math.max(680, Math.floor(window.innerWidth * 0.52)));
+      setSourceWidth(targetExpanded);
+      setIsSourceExpanded(true);
+    }
+  };
 
   // Mobile layout state (< 900px)
   const [mobileTab, setMobileTab] = useState('answer'); // 'shelf' | 'answer' | 'source'
@@ -369,7 +413,12 @@ export default function Chat() {
       <div className="flex-1 flex overflow-hidden relative">
         {/* COLUMN 1: THE SHELF (Left) */}
         {(!isMobile || mobileTab === 'shelf') && (
-          <div className={`${isMobile ? 'w-full' : shelfOpen ? 'w-72' : 'w-0 hidden'} flex-shrink-0 transition-all duration-150`}>
+          <div
+            style={!isMobile && shelfOpen ? { width: `${shelfWidth}px` } : undefined}
+            className={`${isMobile ? 'w-full' : shelfOpen ? '' : 'w-0 hidden'} flex-shrink-0 ${
+              isDraggingShelf ? 'transition-none' : 'transition-all duration-150'
+            }`}
+          >
             <Shelf
               documents={documents}
               selectedDocIds={selectedDocIds}
@@ -387,6 +436,40 @@ export default function Chat() {
                 if (isMobile) setMobileTab('answer');
               }}
               className="h-full"
+            />
+          </div>
+        )}
+
+        {/* RESIZE HANDLE: SHELF (Left) */}
+        {!isMobile && shelfOpen && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize Shelf"
+            aria-valuenow={shelfWidth}
+            aria-valuemin={200}
+            aria-valuemax={520}
+            tabIndex={0}
+            onMouseDown={startShelfResize}
+            onTouchStart={startShelfResize}
+            onDoubleClick={resetShelfWidth}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight') setShelfWidth((w) => Math.min(520, w + 16));
+              else if (e.key === 'ArrowLeft') setShelfWidth((w) => Math.max(200, w - 16));
+              else if (e.key === 'Enter' || e.key === 'Home') resetShelfWidth();
+            }}
+            title="Drag to resize shelf · Double-click to reset"
+            className={`group relative w-1 -ml-0.5 cursor-col-resize flex-shrink-0 select-none z-30 transition-colors ${
+              isDraggingShelf ? 'bg-[var(--accent)]' : 'bg-transparent hover:bg-[var(--line)]'
+            }`}
+          >
+            <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
+            <div
+              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-all ${
+                isDraggingShelf
+                  ? 'bg-[var(--accent)] opacity-100 scale-y-125'
+                  : 'bg-[var(--muted)] opacity-0 group-hover:opacity-70'
+              }`}
             />
           </div>
         )}
@@ -521,9 +604,48 @@ export default function Chat() {
           </main>
         )}
 
+        {/* RESIZE HANDLE: EVIDENCE PANEL (Right) */}
+        {!isMobile && sourcePanelOpen && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize Evidence Panel"
+            aria-valuenow={sourceWidth}
+            aria-valuemin={280}
+            aria-valuemax={800}
+            tabIndex={0}
+            onMouseDown={startSourceResize}
+            onTouchStart={startSourceResize}
+            onDoubleClick={resetSourceWidth}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowLeft') setSourceWidth((w) => Math.min(800, w + 16));
+              else if (e.key === 'ArrowRight') setSourceWidth((w) => Math.max(280, w - 16));
+              else if (e.key === 'Enter' || e.key === 'Home') resetSourceWidth();
+            }}
+            title="Drag to resize citation panel · Double-click to reset"
+            className={`group relative w-1 -mr-0.5 cursor-col-resize flex-shrink-0 select-none z-30 transition-colors ${
+              isDraggingSource ? 'bg-[var(--accent)]' : 'bg-transparent hover:bg-[var(--line)]'
+            }`}
+          >
+            <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
+            <div
+              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-all ${
+                isDraggingSource
+                  ? 'bg-[var(--accent)] opacity-100 scale-y-125'
+                  : 'bg-[var(--muted)] opacity-0 group-hover:opacity-70'
+              }`}
+            />
+          </div>
+        )}
+
         {/* COLUMN 3: THE SOURCE EVIDENCE (Right) */}
         {(!isMobile || mobileTab === 'source') && (
-          <div className={`${isMobile ? 'w-full' : sourcePanelOpen ? 'flex' : 'hidden'} flex-shrink-0 h-full`}>
+          <div
+            style={!isMobile && sourcePanelOpen ? { width: `${sourceWidth}px` } : undefined}
+            className={`${isMobile ? 'w-full' : sourcePanelOpen ? 'flex' : 'hidden'} flex-shrink-0 h-full ${
+              isDraggingSource ? 'transition-none' : 'transition-all duration-150'
+            }`}
+          >
             <SourcePanel
               isOpen={isMobile ? true : sourcePanelOpen}
               onClose={() => {
@@ -536,6 +658,9 @@ export default function Chat() {
                 setActiveCitationIndex(idx);
               }}
               query={lastQuery}
+              className="w-full"
+              isExpanded={isSourceExpanded}
+              onToggleExpand={handleToggleSourceExpand}
             />
           </div>
         )}
