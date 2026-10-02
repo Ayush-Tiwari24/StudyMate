@@ -1,4 +1,4 @@
-import client from './client';
+import client, { getToken } from './client';
 import {
   mockListDocuments,
   mockUploadDocument,
@@ -47,7 +47,8 @@ export const getDocumentFileUrl = (documentId) => {
   const base = import.meta.env.VITE_API_URL
     ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
     : '/api';
-  return `${base}/documents/${documentId}/file`;
+  const token = getToken();
+  return `${base}/documents/${documentId}/file${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 };
 
 export const fetchDocumentBlob = (documentId) => {

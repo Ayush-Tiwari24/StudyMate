@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchDocumentBlob } from '../../api/documents';
+import { fetchDocumentBlob, getDocumentFileUrl } from '../../api/documents';
 import HighlightOverlay from './HighlightOverlay';
 
 // In-memory cache for downloaded PDF blobs (documentId -> objectUrl)
@@ -48,14 +48,20 @@ export default function PdfPageView({
       setBlobUrl(url);
       setLoadError(null);
     } catch (err) {
-      console.error('Failed to load PDF blob:', err);
-      const status = err.response?.status;
-      if (status === 404) {
-        setLoadError('This source document is not found on the server.');
-      } else if (status === 401) {
-        setLoadError('Authentication required to view document.');
+      console.warn('Failed to load PDF blob, trying direct authenticated URL:', err);
+      const directUrl = getDocumentFileUrl(documentId);
+      if (directUrl) {
+        setBlobUrl(directUrl);
+        setLoadError(null);
       } else {
-        setLoadError(err.message || 'Unable to load source PDF preview.');
+        const status = err.response?.status;
+        if (status === 404) {
+          setLoadError('This source document is not found on the server.');
+        } else if (status === 401) {
+          setLoadError('Authentication required to view document.');
+        } else {
+          setLoadError(err.message || 'Unable to load source PDF preview.');
+        }
       }
     } finally {
       setLoading(false);

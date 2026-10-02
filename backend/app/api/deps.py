@@ -6,7 +6,8 @@ Shared dependencies injected into route handlers:
 - get_current_user: JWT-authenticated user
 """
 
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -14,19 +15,28 @@ from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.user import User
 
-# HTTP Bearer scheme for JWT
-security = HTTPBearer()
+# HTTP Bearer scheme for JWT (auto_error=False to allow query param token fallback)
+security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ) -> User:
     """
-    Decode the JWT from the Authorization header and return the user.
-    Raises 401 if token is invalid or user not found.
+    Decode the JWT from Authorization header or ?token= query parameter.
+    Raises 401 if token is missing, invalid, or user not found.
     """
-    payload = decode_token(credentials.credentials)
+    raw_token = credentials.credentials if credentials else token
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = decode_token(raw_token)
 
     if payload is None:
         raise HTTPException(
