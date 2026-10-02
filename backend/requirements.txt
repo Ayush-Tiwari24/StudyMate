@@ -3,7 +3,8 @@ uvicorn[standard]
 python-multipart
 sqlalchemy
 alembic
-pydantic
+pydantic[email]
+email-validator
 pydantic-settings
 python-jose[cryptography]
 passlib[bcrypt]
