@@ -5,7 +5,7 @@ import DocumentTable from '../components/library/DocumentTable';
 import { Search, RotateCw } from 'lucide-react';
 
 export default function Library() {
-  const { documents, loading, refresh, upload, remove, retry } = useDocuments();
+  const { documents, loading, storage, refresh, upload, remove, retry } = useDocuments();
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredDocs = documents.filter((doc) =>
@@ -38,7 +38,7 @@ export default function Library() {
         </div>
 
         {/* Drop Zone: "Drop your notes here" */}
-        <UploadDropzone onUploadSuccess={upload} />
+        <UploadDropzone onUploadSuccess={upload} storage={storage} />
 
         {/* Search & Document Table */}
         <div className="flex flex-col gap-3">

@@ -1,8 +1,9 @@
 # ─────────────────────────────────────────────────────────────────
 # Render Blueprint — StudyMate AI Backend Web Service
 # ─────────────────────────────────────────────────────────────────
+# Architecture: Unified Neon Serverless Postgres + Render Web Service
 # Plan: Standard (2 GB RAM, 1 CPU) to safely accommodate PyTorch & embeddings
-# Region: Singapore (closest Render region to Supabase Mumbai ap-south-1)
+# Region: Singapore (ap-southeast-1 Neon + Singapore Render)
 # ─────────────────────────────────────────────────────────────────
 
 services:
@@ -34,11 +35,19 @@ services:
       - key: AUTO_CREATE_TABLES
         value: "false"
 
-      # Dual backend selection: Online production uses pgvector + Supabase S3
+      # Unified data store: Neon Postgres for relational data, pgvector for vectors, db for PDF files
       - key: VECTOR_BACKEND
         value: pgvector
       - key: STORAGE_BACKEND
-        value: s3
+        value: db
+
+      # Storage Limits
+      - key: MAX_UPLOAD_MB
+        value: "10"
+      - key: USER_STORAGE_QUOTA_MB
+        value: "50"
+      - key: GLOBAL_STORAGE_CAP_MB
+        value: "400"
 
       # LLM Provider: Production Groq configuration
       - key: LLM_PROVIDER
@@ -50,28 +59,18 @@ services:
       - key: GROQ_BASE_URL
         value: https://api.groq.com/openai/v1
 
-      # S3 Region (Supabase Mumbai)
-      - key: S3_REGION
-        value: ap-south-1
-
       # Security: Auto-generate strong cryptographic JWT Secret
       - key: JWT_SECRET
         generateCrypto: true
 
       # Secrets & Environment Specific (configured via Render dashboard or env group)
+      # DATABASE_URL: Neon pooled connection string (with -pooler) for app runtime
       - key: DATABASE_URL
         sync: false
+      # MIGRATION_DATABASE_URL: Neon direct connection string (port 5432, non-pooler) for Alembic migrations
       - key: MIGRATION_DATABASE_URL
         sync: false
       - key: GROQ_API_KEY
-        sync: false
-      - key: S3_BUCKET
-        sync: false
-      - key: S3_ENDPOINT_URL
-        sync: false
-      - key: S3_ACCESS_KEY
-        sync: false
-      - key: S3_SECRET_KEY
         sync: false
       - key: FRONTEND_ORIGIN
         sync: false

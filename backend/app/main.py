@@ -42,7 +42,23 @@ async def lifespan(app: FastAPI):
         if settings.database_url.startswith("sqlite"):
             error_msg = (
                 "CRITICAL: DATABASE_URL cannot be SQLite in production. "
-                "Please configure a production PostgreSQL / Supabase connection."
+                "Please configure a production PostgreSQL / Neon connection."
+            )
+            logger.critical(error_msg)
+            raise RuntimeError(error_msg)
+
+        if settings.storage_backend == "local":
+            error_msg = (
+                "CRITICAL: STORAGE_BACKEND cannot be 'local' in production. "
+                "Use 'db' (recommended, stores PDFs in Neon) or 's3'."
+            )
+            logger.critical(error_msg)
+            raise RuntimeError(error_msg)
+
+        if settings.vector_backend == "chroma":
+            error_msg = (
+                "CRITICAL: VECTOR_BACKEND cannot be 'chroma' in production. "
+                "Use 'pgvector' with Neon serverless Postgres."
             )
             logger.critical(error_msg)
             raise RuntimeError(error_msg)
@@ -53,6 +69,10 @@ async def lifespan(app: FastAPI):
         )
         logger.critical(error_msg)
         raise RuntimeError(error_msg)
+
+    # Log database & backend setup info
+    from app.db.session import log_database_startup_info
+    log_database_startup_info()
 
     # Create tables if enabled (dev convenience; disabled in production where Alembic runs)
     if settings.auto_create_tables:
@@ -203,16 +223,18 @@ def health_check():
 @app.get("/api/health/ready", tags=["Health"])
 def readiness_check():
     """Readiness probe for zero-downtime deployments and container health checks."""
-    from fastapi import HTTPException, status
+    from fastapi.responses import JSONResponse
+    from app.db.session import engine, execute_with_retry
+    from sqlalchemy import text
     try:
-        from app.db.session import engine
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1;"))
+        def _ping():
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1;"))
+        execute_with_retry(_ping, max_retries=2, delays=(0.5, 1.0))
         return {"status": "ready"}
     except Exception as e:
-        logger.error(f"Readiness check failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database unavailable",
+        logger.warning(f"Readiness check failed / database waking: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "waking", "detail": "Database unavailable"},
         )

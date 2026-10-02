@@ -11,12 +11,37 @@ export function useDocuments() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [storage, setStorage] = useState({
+    usedBytes: 0,
+    quotaBytes: 50 * 1024 * 1024,
+    usedMb: 0,
+    quotaMb: 50,
+    percentUsed: 0,
+    isWarning: false,
+    isFull: false,
+  });
   const pollTimerRef = useRef(null);
 
   const fetchDocs = useCallback(async () => {
     try {
       const res = await listDocuments();
       setDocuments(res.data.documents || []);
+
+      if (res.data) {
+        const usedMb = res.data.storage_used_mb ?? 0;
+        const quotaMb = res.data.storage_quota_mb ?? 50;
+        const percentUsed = res.data.storage_percent_used ?? 0;
+        setStorage({
+          usedBytes: res.data.storage_used_bytes || 0,
+          quotaBytes: res.data.storage_quota_bytes || 50 * 1024 * 1024,
+          usedMb,
+          quotaMb,
+          percentUsed,
+          isWarning: percentUsed >= 80,
+          isFull: percentUsed >= 100,
+        });
+      }
+
       setError(null);
       return res.data.documents || [];
     } catch (err) {
@@ -108,6 +133,7 @@ export function useDocuments() {
     readyDocuments,
     loading,
     error,
+    storage,
     refresh: fetchDocs,
     upload,
     remove,

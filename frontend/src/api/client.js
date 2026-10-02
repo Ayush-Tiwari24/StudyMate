@@ -125,9 +125,24 @@ client.interceptors.response.use(
       errorCode = 'RATE_LIMIT';
     } else if (status === 409 && errorCode === 'DOCUMENT_NOT_READY') {
       normalizedMessage = data?.error?.message || 'This document is still being read. Please wait a moment.';
-    } else if (status === 502 || status === 503 || status === 504) {
-      normalizedMessage = 'The backend server is waking up from sleep. Please wait a moment and try again.';
+    } else if (status === 502 || status === 503 || status === 504 || data?.status === 'waking') {
+      normalizedMessage = 'The database or server is waking up from sleep. Please wait a moment...';
       errorCode = 'SERVER_STARTING';
+
+      // Auto-retry idempotent GET requests and login on cold start
+      const isIdempotentOrLogin =
+        (originalRequest?.method?.toLowerCase() === 'get' || originalRequest?.url?.includes('/auth/login')) &&
+        !originalRequest?.url?.includes('/health');
+
+      if (isIdempotentOrLogin && originalRequest) {
+        originalRequest._coldStartRetries = (originalRequest._coldStartRetries || 0) + 1;
+        if (originalRequest._coldStartRetries <= 2) {
+          const delay = originalRequest._coldStartRetries * 1500;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return client(originalRequest);
+        }
+      }
+
       window.dispatchEvent(
         new CustomEvent('backend-cold-start', {
           detail: { status, message: normalizedMessage },

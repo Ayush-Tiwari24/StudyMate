@@ -11,12 +11,14 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
 from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.models.user import User
+from app.models.document import Document
 from app.models.refresh_token import RefreshToken
 from app.schemas.auth import (
     RegisterRequest,
@@ -179,9 +181,21 @@ def logout(body: Optional[LogoutRequest] = None, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    """Return the currently authenticated user's profile."""
-    return current_user
+def get_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the currently authenticated user's profile with storage usage."""
+    used_bytes = int(
+        db.query(func.coalesce(func.sum(Document.size_bytes), 0))
+        .filter(Document.user_id == current_user.id)
+        .scalar()
+        or 0
+    )
+    resp = UserResponse.model_validate(current_user)
+    resp.storage_used_bytes = used_bytes
+    resp.storage_quota_bytes = settings.user_storage_quota_bytes
+    return resp
 
 
 @router.get("/me/export")

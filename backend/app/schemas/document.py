@@ -38,6 +38,20 @@ class DocumentUploadResponse(BaseModel):
     status: str = "uploaded"
 
 
+class StorageUsageResponse(BaseModel):
+    used_bytes: int
+    quota_bytes: int
+    used_mb: float
+    quota_mb: int
+    percent_used: float
+
+
 class DocumentListResponse(BaseModel):
     documents: list[DocumentResponse]
     total: int
+    storage_used_bytes: int = 0
+    storage_quota_bytes: int = 50 * 1024 * 1024
+    storage_used_mb: float = 0.0
+    storage_quota_mb: int = 50
+    storage_percent_used: float = 0.0
+

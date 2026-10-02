@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 from fastapi.responses import FileResponse
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
@@ -24,10 +25,25 @@ from app.schemas.document import (
     DocumentResponse,
     DocumentStatusResponse,
     DocumentListResponse,
+    StorageUsageResponse,
 )
 from app.utils.file_utils import compute_sha256, safe_filename, ensure_dir
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
+
+
+def get_database_size_bytes(db: Session) -> int:
+    """Check total database size in bytes (pg_database_size on Postgres, page pragma on SQLite)."""
+    try:
+        if db.bind.dialect.name == "postgresql":
+            res = db.execute(text("SELECT pg_database_size(current_database());")).scalar()
+            return int(res or 0)
+        else:
+            res = db.execute(text("SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size();")).scalar()
+            return int(res or 0)
+    except Exception as e:
+        logger.warning(f"Could not inspect database size: {e}")
+        return 0
 
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -38,8 +54,8 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Upload a PDF file. Validates type and size, saves to disk,
-    and enqueues background ingestion.
+    Upload a PDF file. Validates type and size, enforces user quota & global cap,
+    saves to configured storage, and enqueues background ingestion.
     """
     # Validate content type
     if file.content_type != "application/pdf":
@@ -50,12 +66,36 @@ async def upload_document(
 
     # Read file content
     content = await file.read()
+    content_len = len(content)
 
     # Validate file size
-    if len(content) > settings.max_upload_bytes:
+    if content_len > settings.max_upload_bytes:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=413,
             detail=f"File exceeds maximum size of {settings.max_upload_mb} MB.",
+        )
+
+    # Check global soft cap (refuse new uploads when database exceeds global cap)
+    current_db_size = get_database_size_bytes(db)
+    if current_db_size + content_len > settings.global_storage_cap_bytes:
+        logger.warning(
+            f"Global storage cap reached: db_size={current_db_size} cap={settings.global_storage_cap_bytes}"
+        )
+        raise HTTPException(
+            status_code=413,
+            detail="Uploads are paused because storage is full.",
+        )
+
+    # Check per-user storage quota
+    user_used_bytes = (
+        db.query(func.coalesce(func.sum(Document.size_bytes), 0))
+        .filter(Document.user_id == current_user.id)
+        .scalar()
+    )
+    if (user_used_bytes + content_len) > settings.user_storage_quota_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail="You've used all your storage. Delete a document to add more.",
         )
 
     # Check for duplicates via SHA-256 hash
@@ -82,7 +122,7 @@ async def upload_document(
         filename=file.filename or "document.pdf",
         file_path=storage_key,
         file_hash=file_hash,
-        size_bytes=len(content),
+        size_bytes=content_len,
         status="uploaded",
     )
     db.add(document)
@@ -102,21 +142,58 @@ async def upload_document(
     )
 
 
+@router.get("/usage", response_model=StorageUsageResponse)
+def get_storage_usage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return user's storage quota usage breakdown."""
+    user_used_bytes = int(
+        db.query(func.coalesce(func.sum(Document.size_bytes), 0))
+        .filter(Document.user_id == current_user.id)
+        .scalar()
+        or 0
+    )
+    quota_bytes = settings.user_storage_quota_bytes
+    quota_mb = settings.user_storage_quota_mb
+    used_mb = round(user_used_bytes / (1024 * 1024), 2)
+    percent_used = round((user_used_bytes / quota_bytes) * 100, 1) if quota_bytes > 0 else 0.0
+
+    return StorageUsageResponse(
+        used_bytes=user_used_bytes,
+        quota_bytes=quota_bytes,
+        used_mb=used_mb,
+        quota_mb=quota_mb,
+        percent_used=percent_used,
+    )
+
+
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all documents belonging to the current user."""
+    """List all documents belonging to the current user with storage usage summary."""
     docs = (
         db.query(Document)
         .filter(Document.user_id == current_user.id)
         .order_by(Document.uploaded_at.desc())
         .all()
     )
+    used_bytes = sum(d.size_bytes or 0 for d in docs)
+    quota_bytes = settings.user_storage_quota_bytes
+    quota_mb = settings.user_storage_quota_mb
+    used_mb = round(used_bytes / (1024 * 1024), 2)
+    percent_used = round((used_bytes / quota_bytes) * 100, 1) if quota_bytes > 0 else 0.0
+
     return DocumentListResponse(
         documents=[DocumentResponse.model_validate(d) for d in docs],
         total=len(docs),
+        storage_used_bytes=used_bytes,
+        storage_quota_bytes=quota_bytes,
+        storage_used_mb=used_mb,
+        storage_quota_mb=quota_mb,
+        storage_percent_used=percent_used,
     )
 
 
@@ -173,13 +250,18 @@ def download_document(
     else:
         stream = io.BytesIO(storage.open(doc.file_path))
 
+    headers = {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": f'inline; filename="{doc.filename}"',
+        "Accept-Ranges": "bytes",
+    }
+    if doc.size_bytes and doc.size_bytes > 0:
+        headers["Content-Length"] = str(doc.size_bytes)
+
     return StreamingResponse(
         stream,
         media_type="application/pdf",
-        headers={
-            "Content-Type": "application/pdf",
-            "Content-Disposition": f'inline; filename="{doc.filename}"',
-        },
+        headers=headers,
     )
 
 

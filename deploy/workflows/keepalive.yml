@@ -1,9 +1,10 @@
 name: Backend Health Keepalive
 
 on:
-  schedule:
-    # Run every 14 minutes to prevent Render free-tier cold starts or verify service uptime
-    - cron: "*/14 * * * *"
+  # Cron disabled by default to allow Neon serverless compute to sleep when idle.
+  # Enable if using Render free-tier without sleeping database constraints.
+  # schedule:
+  #   - cron: "*/14 * * * *"
   workflow_dispatch:
 
 jobs:

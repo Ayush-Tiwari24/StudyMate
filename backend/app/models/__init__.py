@@ -9,6 +9,7 @@ from app.models.document import Document, Chunk, chat_documents
 from app.models.chat import Chat
 from app.models.message import Message, MessageSource, Feedback
 from app.models.refresh_token import RefreshToken
+from app.models.stored_file import StoredFile
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "MessageSource",
     "Feedback",
     "RefreshToken",
+    "StoredFile",
 ]

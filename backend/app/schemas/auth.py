@@ -53,6 +53,8 @@ class UserResponse(BaseModel):
     email: str
     preferences: dict = {}
     created_at: datetime
+    storage_used_bytes: Optional[int] = 0
+    storage_quota_bytes: Optional[int] = 0
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -57,6 +57,22 @@ def cleanup_storage_orphans(valid_file_paths: set[str], dry_run: bool = False) -
                 logger.info(f"Deleted {len(orphan_keys)} orphan files from S3.")
         except Exception as e:
             logger.error(f"Error inspecting S3 storage for orphans: {e}")
+    elif storage_backend == "db":
+        logger.info("Scanning database 'stored_files' table for orphan files...")
+        from app.models.stored_file import StoredFile
+        try:
+            with SessionLocal() as db:
+                query = db.query(StoredFile).filter(~StoredFile.key.in_(valid_file_paths))
+                orphans = query.all()
+                orphan_files_count = len(orphans)
+                for o in orphans:
+                    logger.warning(f"Orphan stored_file found: key={o.key} id={o.id} size={o.size_bytes}")
+                if not dry_run and orphan_files_count > 0:
+                    query.delete(synchronize_session=False)
+                    db.commit()
+                    logger.info(f"Deleted {orphan_files_count} orphan stored_files from database.")
+        except Exception as e:
+            logger.error(f"Error inspecting database stored_files for orphans: {e}")
     else:
         # LocalStorage
         upload_root = settings.upload_path

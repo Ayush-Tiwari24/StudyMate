@@ -55,3 +55,8 @@ export const fetchDocumentBlob = (documentId) => {
     responseType: 'blob',
   });
 };
+
+export const getStorageUsage = () => {
+  return client.get('/documents/usage');
+};
+

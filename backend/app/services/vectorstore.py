@@ -272,7 +272,7 @@ def _search_pgvector(
         LIMIT :n
     """)
 
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         try:
             conn.execute(text(f"SET LOCAL hnsw.ef_search = {int(ef_search)}"))
         except Exception:

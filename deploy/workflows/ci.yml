@@ -91,11 +91,11 @@ jobs:
           alembic downgrade base
           alembic upgrade head
 
-      - name: Run Backend Pytest (pgvector)
+      - name: Run Backend Pytest (pgvector + db storage)
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgrespassword@localhost:5432/studymate_test
           VECTOR_BACKEND: pgvector
-          STORAGE_BACKEND: local
+          STORAGE_BACKEND: db
           JWT_SECRET: ci-test-secret-key-at-least-32-chars-long
           ENVIRONMENT: production
         run: |

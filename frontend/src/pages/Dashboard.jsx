@@ -5,10 +5,11 @@ import { useDocuments } from '../hooks/useDocuments';
 import { listChats } from '../api/chat';
 import { Plus, MessageSquare, ArrowRight, BookOpen, Clock } from 'lucide-react';
 import StatusDot from '../components/library/StatusDot';
+import StorageBar from '../components/common/StorageBar';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { documents, readyDocuments } = useDocuments();
+  const { documents, readyDocuments, storage } = useDocuments();
   const [chats, setChats] = useState([]);
   const navigate = useNavigate();
 
@@ -89,32 +90,46 @@ export default function Dashboard() {
         ) : null}
 
         {/* Overview Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col gap-1">
-            <span className="text-xs text-[var(--muted)] font-sans">Documents Indexed</span>
-            <span className="font-mono text-2xl font-bold text-[var(--ink)]">
-              {documents.length}
-            </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col justify-between gap-1">
+            <div>
+              <span className="text-xs text-[var(--muted)] font-sans">Documents Indexed</span>
+              <div className="font-mono text-2xl font-bold text-[var(--ink)] mt-1">
+                {documents.length}
+              </div>
+            </div>
             <span className="text-[11px] text-[var(--subtle)] font-mono">
               {readyDocuments.length} ready for reading
             </span>
           </div>
 
-          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col gap-1">
-            <span className="text-xs text-[var(--muted)] font-sans">Total Pages</span>
-            <span className="font-mono text-2xl font-bold text-[var(--ink)]">
-              {totalPages}
-            </span>
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col justify-between gap-2">
+            <StorageBar
+              usedMb={storage.usedMb}
+              quotaMb={storage.quotaMb}
+              percentUsed={storage.percentUsed}
+            />
+          </div>
+
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col justify-between gap-1">
+            <div>
+              <span className="text-xs text-[var(--muted)] font-sans">Total Pages</span>
+              <div className="font-mono text-2xl font-bold text-[var(--ink)] mt-1">
+                {totalPages}
+              </div>
+            </div>
             <span className="text-[11px] text-[var(--subtle)] font-mono">
               Across all course notes
             </span>
           </div>
 
-          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col gap-1">
-            <span className="text-xs text-[var(--muted)] font-sans">Study Sessions</span>
-            <span className="font-mono text-2xl font-bold text-[var(--ink)]">
-              {chats.length}
-            </span>
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col justify-between gap-1">
+            <div>
+              <span className="text-xs text-[var(--muted)] font-sans">Study Sessions</span>
+              <div className="font-mono text-2xl font-bold text-[var(--ink)] mt-1">
+                {chats.length}
+              </div>
+            </div>
             <span className="text-[11px] text-[var(--subtle)] font-mono">
               Recorded in history
             </span>

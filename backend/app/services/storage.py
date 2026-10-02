@@ -7,14 +7,19 @@ Supports:
 - S3Storage (AWS S3, Cloudflare R2, Supabase Storage, or any S3-compatible service)
 """
 
+import io
 import shutil
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import text
+
 from app.core.config import settings
 from app.core.logger import logger
+from app.db.session import SessionLocal, engine
+from app.models.stored_file import StoredFile
 from app.utils.file_utils import safe_filename, ensure_dir
 
 
@@ -191,10 +196,146 @@ class S3Storage(BaseStorage):
             logger.warning(f"S3Storage error deleting prefix {prefix}: {e}")
 
 
+class DatabaseStream(io.RawIOBase):
+    """
+    Streaming reader for database-stored files (Postgres bytea / SQLite BLOB).
+    Queries SQL slices in chunks using substring / substr to stream to HTTP clients
+    without buffering the entire file into Python RAM twice.
+    """
+
+    def __init__(self, key: str, chunk_size: int = 64 * 1024):
+        super().__init__()
+        self.key = key
+        self.chunk_size = chunk_size
+        self._pos = 0  # 0-indexed byte position in stream
+        self._total_size: Optional[int] = None
+        self._is_postgres = (engine.dialect.name == "postgresql")
+
+        with SessionLocal() as db:
+            row = db.query(StoredFile.size_bytes).filter(StoredFile.key == key).first()
+            if not row:
+                raise FileNotFoundError(f"File not found in database storage: {key}")
+            self._total_size = int(row[0])
+
+    @property
+    def total_size(self) -> int:
+        return self._total_size or 0
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b) -> int:
+        data = self.read(len(b))
+        n = len(data)
+        b[:n] = data
+        return n
+
+    def read(self, size: int = -1) -> bytes:
+        if self._total_size is None or self._pos >= self._total_size:
+            return b""
+
+        if size is None or size < 0:
+            bytes_to_read = self._total_size - self._pos
+        else:
+            bytes_to_read = min(size, self._total_size - self._pos)
+
+        if bytes_to_read <= 0:
+            return b""
+
+        # SQL substring / substr is 1-based
+        start_1based = self._pos + 1
+        with SessionLocal() as db:
+            if self._is_postgres:
+                sql = text("SELECT substring(data from :start for :len) FROM stored_files WHERE key = :key")
+            else:
+                sql = text("SELECT substr(data, :start, :len) FROM stored_files WHERE key = :key")
+
+            res = db.execute(sql, {"start": start_1based, "len": bytes_to_read, "key": self.key}).scalar()
+
+        chunk = bytes(res) if res is not None else b""
+        self._pos += len(chunk)
+        return chunk
+
+    def __iter__(self):
+        while True:
+            chunk = self.read(self.chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+
+class DatabaseStorage(BaseStorage):
+    """
+    Relational database blob storage backend (PostgreSQL bytea / SQLite BLOB).
+    Stores PDF files in the stored_files table, allowing production deployments
+    to keep zero files on local disk and avoid external S3/Supabase storage.
+    """
+
+    def save(self, user_id: int, filename: str, content: bytes) -> str:
+        import hashlib
+        clean_name = safe_filename(filename)
+        key = f"{user_id}/{clean_name}"
+        sha256 = hashlib.sha256(content).hexdigest()
+        size = len(content)
+
+        with SessionLocal() as db:
+            existing = db.query(StoredFile).filter(StoredFile.key == key).first()
+            if existing:
+                existing.data = content
+                existing.size_bytes = size
+                existing.sha256 = sha256
+                existing.content_type = "application/pdf"
+            else:
+                stored = StoredFile(
+                    key=key,
+                    user_id=user_id,
+                    content_type="application/pdf",
+                    size_bytes=size,
+                    sha256=sha256,
+                    data=content,
+                )
+                db.add(stored)
+            db.commit()
+
+        logger.info(f"DatabaseStorage saved: key={key} size={size} bytes")
+        return key
+
+    def open(self, key: str) -> bytes:
+        with SessionLocal() as db:
+            row = db.query(StoredFile.data).filter(StoredFile.key == key).first()
+            if not row or row[0] is None:
+                raise FileNotFoundError(f"File not found in database storage: {key}")
+            return bytes(row[0])
+
+    def open_stream(self, key: str):
+        return DatabaseStream(key)
+
+    def delete(self, key: str) -> None:
+        with SessionLocal() as db:
+            deleted = db.query(StoredFile).filter(StoredFile.key == key).delete()
+            db.commit()
+            if deleted:
+                logger.info(f"DatabaseStorage deleted: key={key}")
+
+    def exists(self, key: str) -> bool:
+        with SessionLocal() as db:
+            row = db.query(StoredFile.id).filter(StoredFile.key == key).first()
+            return row is not None
+
+    def delete_user_files(self, user_id: int) -> None:
+        with SessionLocal() as db:
+            count = db.query(StoredFile).filter(StoredFile.user_id == user_id).delete()
+            db.commit()
+            logger.info(f"DatabaseStorage deleted {count} files for user_id={user_id}")
+
+
 @lru_cache(maxsize=1)
 def get_storage() -> BaseStorage:
     """Return the configured storage backend singleton."""
     backend = settings.storage_backend.lower().strip()
-    if backend == "s3":
+    if backend == "db":
+        return DatabaseStorage()
+    elif backend == "s3":
         return S3Storage()
     return LocalStorage()
+

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { getSettings, updateSettings } from '../api/settings';
 import { deleteAccount, exportUserData } from '../api/auth';
+import { getStorageUsage } from '../api/documents';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { Check, AlertCircle, Trash2, Download } from 'lucide-react';
+import StorageBar from '../components/common/StorageBar';
 
 export default function Settings() {
   const { theme, setTheme, fontScale, setFontScale } = useTheme();
@@ -19,6 +21,11 @@ export default function Settings() {
     font_scale: fontScale || 'medium',
   });
 
+  const [storageUsage, setStorageUsage] = useState({
+    usedMb: 0,
+    quotaMb: 50,
+    percentUsed: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -31,16 +38,32 @@ export default function Settings() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await getSettings();
-        if (res.data && Object.keys(res.data).length > 0) {
-          setSettingsState((prev) => ({
-            ...prev,
-            ...res.data,
-            theme: localStorage.getItem('studymate_theme') || res.data.theme || 'light',
-          }));
+        const [settingsRes, usageRes] = await Promise.allSettled([
+          getSettings(),
+          getStorageUsage(),
+        ]);
+
+        if (settingsRes.status === 'fulfilled' && settingsRes.value?.data) {
+          const data = settingsRes.value.data;
+          if (Object.keys(data).length > 0) {
+            setSettingsState((prev) => ({
+              ...prev,
+              ...data,
+              theme: localStorage.getItem('studymate_theme') || data.theme || 'light',
+            }));
+          }
+        }
+
+        if (usageRes.status === 'fulfilled' && usageRes.value?.data) {
+          const u = usageRes.value.data;
+          setStorageUsage({
+            usedMb: u.used_mb ?? 0,
+            quotaMb: u.quota_mb ?? 50,
+            percentUsed: u.percent_used ?? 0,
+          });
         }
       } catch (err) {
-        console.error('Failed to load settings:', err);
+        console.error('Failed to load settings data:', err);
       } finally {
         setLoading(false);
       }
@@ -288,6 +311,27 @@ export default function Settings() {
               </button>
             </div>
           </form>
+        )}
+
+        {/* Storage & Quota Allocation */}
+        {!loading && (
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-5 shadow-xs flex flex-col gap-3">
+            <div>
+              <h2 className="font-serif text-base font-semibold text-[var(--ink)]">
+                Storage & Quota
+              </h2>
+              <p className="text-xs text-[var(--muted)] font-sans mt-0.5">
+                Your personal storage allocation for course materials and lecture notes.
+              </p>
+            </div>
+
+            <StorageBar
+              usedMb={storageUsage.usedMb}
+              quotaMb={storageUsage.quotaMb}
+              percentUsed={storageUsage.percentUsed}
+              className="mt-1"
+            />
+          </div>
         )}
 
         {/* Export Data */}

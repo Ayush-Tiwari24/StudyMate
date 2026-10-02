@@ -23,26 +23,28 @@ class Settings(BaseSettings):
     migration_database_url: str = ""  # Direct connection URL for Alembic when using Supabase pooler
     auto_create_tables: bool = True
     run_migrations_on_start: bool = True
-    db_pool_size: int = 5
-    db_max_overflow: int = 10
-    db_pool_recycle: int = 1800
+    db_pool_size: int = 3
+    db_max_overflow: int = 2
+    db_pool_recycle: int = 240
     db_pool_pre_ping: bool = True
 
     # ── File Storage ─────────────────────────────────────────────
-    storage_backend: str = "local"  # "local" | "s3"
+    storage_backend: str = "local"  # "local" | "s3" | "db"
     upload_dir: str = "./data/raw_pdfs"
     s3_bucket: str = ""
     s3_endpoint_url: str = ""
     s3_access_key: str = ""
     s3_secret_key: str = ""
     s3_region: str = "us-east-1"
+    max_upload_mb: int = 10
+    user_storage_quota_mb: int = 50
+    global_storage_cap_mb: int = 400
 
     # ── Vector Store ─────────────────────────────────────────────
     vector_backend: str = "chroma"  # "chroma" | "pgvector"
     vector_store_dir: str = "./data/vector_store"
     embedding_dim: int = 384
     hnsw_ef_search: int = 40
-    max_upload_mb: int = 50
 
     # ── JWT Auth ─────────────────────────────────────────────────
     jwt_secret: str = "change-me-to-a-random-string"
@@ -97,6 +99,14 @@ class Settings(BaseSettings):
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def user_storage_quota_bytes(self) -> int:
+        return self.user_storage_quota_mb * 1024 * 1024
+
+    @property
+    def global_storage_cap_bytes(self) -> int:
+        return self.global_storage_cap_mb * 1024 * 1024
 
     @property
     def upload_path(self) -> Path:

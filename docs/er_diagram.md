@@ -12,6 +12,7 @@ erDiagram
     USERS ||--o{ DOCUMENTS : "owns (CASCADE)"
     USERS ||--o{ CHATS : "creates (CASCADE)"
     USERS ||--o{ FEEDBACK : "submits (CASCADE)"
+    USERS ||--o{ STORED_FILES : "owns (CASCADE)"
 
     DOCUMENTS ||--o{ CHUNKS : "contains (CASCADE)"
     DOCUMENTS ||--o{ CHAT_DOCUMENTS : "referenced in (CASCADE)"
@@ -108,6 +109,17 @@ erDiagram
         text comment "optional user comment"
         datetime created_at "timezone=True"
     }
+
+    STORED_FILES {
+        int id PK "autoincrement"
+        string key "unique, index"
+        int user_id FK "CASCADE, index"
+        string content_type "application/pdf"
+        bigint size_bytes "file size in bytes"
+        string sha256 "SHA-256 hash"
+        bytea data "raw binary PDF contents"
+        datetime created_at "timezone=True"
+    }
 ```
 
 ---
@@ -165,7 +177,13 @@ erDiagram
   - HNSW index on `embedding vector_cosine_ops` (`m=16, ef_construction=64`) for ultra-fast approximate nearest neighbor search.
   - Btree index on `(user_id, document_id)` for tenant isolation and filtered retrieval.
 
-### 11. `vector_meta` (PostgreSQL / Supabase)
+### 11. `vector_meta` (PostgreSQL / Neon)
 - **Role**: Tracks vector schema metadata, active embedding model name, and dimensions to prevent model mismatch.
 - **Columns**: `key` (PK, string), `value` (text), `updated_at` (timestamptz).
+
+### 12. `stored_files` (PostgreSQL / Neon)
+- **Role**: Direct binary storage for uploaded PDF files (`bytea` in PostgreSQL, BLOB in SQLite). Keeps the application server 100% stateless with zero disk files in production.
+- **Columns**: `id` (PK, autoincrement), `key` (unique text string e.g. `'1/notes.pdf'`), `user_id` (FK to `users.id` with `CASCADE`), `content_type` (text, default `'application/pdf'`), `size_bytes` (bigint), `sha256` (64-char string), `data` (binary bytea), `created_at` (timestamptz).
+- **Indexes**: Unique index on `key`, index on `user_id`.
+
 
