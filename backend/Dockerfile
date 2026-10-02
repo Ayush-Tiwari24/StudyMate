@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 # Install remaining Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt email-validator
+RUN pip install --no-cache-dir -r requirements.txt email-validator langchain-huggingface
 
 # Create necessary directories and pre-download HuggingFace embedding model into image
 RUN mkdir -p /app/.cache/huggingface data/raw_pdfs data/vector_store && \

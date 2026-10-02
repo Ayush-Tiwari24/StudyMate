@@ -8,7 +8,10 @@ Uses sentence-transformers for local, lightweight embeddings.
 
 from functools import lru_cache
 
-from langchain_huggingface import HuggingFaceEmbeddings
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from app.core.config import settings
 from app.core.logger import logger

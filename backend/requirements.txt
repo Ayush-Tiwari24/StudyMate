@@ -11,6 +11,7 @@ passlib[bcrypt]
 slowapi
 langchain
 langchain-community
+langchain-huggingface
 langchain-openai
 langchain-chroma
 langchain-ollama
