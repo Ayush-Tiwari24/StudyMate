@@ -30,7 +30,10 @@ export default function Navbar() {
     <header className="h-12 bg-[var(--surface)] border-b border-[var(--line)] px-4 flex items-center justify-between select-none z-30 flex-shrink-0">
       {/* Brand: "a reading desk, not a chatbot" */}
       <div className="flex items-center gap-6">
-        <Link to="/chat" className="flex items-baseline gap-2 group">
+        <Link to="/chat" className="flex items-center gap-2.5 group">
+          <div className="w-6 h-6 rounded-[6px] overflow-hidden flex-shrink-0 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+            <img src="/favicon.svg" alt="StudyMate icon" className="w-full h-full object-contain" />
+          </div>
           <span className="font-serif font-semibold text-lg text-[var(--ink)] tracking-tight group-hover:text-[var(--accent)] transition-colors">
             StudyMate
           </span>
