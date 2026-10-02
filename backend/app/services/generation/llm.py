@@ -91,8 +91,8 @@ def get_llm_for_rewrite(
     if provider == "groq":
         from langchain_openai import ChatOpenAI
 
-        # Use ultra-fast 8B instant model for 50ms query rewrite latency
-        model = settings.groq_fallback_model or "llama-3.1-8b-instant"
+        # Use fast 20B model for snappy query rewriting
+        model = settings.groq_model or "openai/gpt-oss-20b"
         api_key = settings.groq_api_key or settings.openai_api_key
         return ChatOpenAI(
             model=model,
