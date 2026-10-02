@@ -4,33 +4,40 @@ StudyMate RAG — Auth Schemas
 Pydantic models for authentication requests and responses.
 """
 
+import re
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
-# ── Requests ─────────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, examples=["Amit Kumar"])
-    email: EmailStr = Field(..., examples=["amit@example.com"])
+    email: str = Field(..., examples=["amit@example.com"])
     password: str = Field(..., min_length=6, max_length=128)
 
     @field_validator("email")
     @classmethod
     def normalize_email(cls, v: str) -> str:
-        return v.strip().lower()
+        v = v.strip().lower()
+        if not EMAIL_REGEX.match(v):
+            raise ValueError("value is not a valid email address: missing @ or domain")
+        return v
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr = Field(..., examples=["amit@example.com"])
+    email: str = Field(..., examples=["amit@example.com"])
     password: str = Field(...)
 
     @field_validator("email")
     @classmethod
     def normalize_email(cls, v: str) -> str:
-        return v.strip().lower()
+        v = v.strip().lower()
+        if not EMAIL_REGEX.match(v):
+            raise ValueError("value is not a valid email address: missing @ or domain")
+        return v
 
 
 class DeleteAccountRequest(BaseModel):
