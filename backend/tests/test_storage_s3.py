@@ -107,10 +107,12 @@ def test_ingestion_temp_file_cleanup(monkeypatch, tmp_path):
     from app.models.document import Document
     from app.db.base import Base
     from app.models.user import User
-    from app.db.session import engine, SessionLocal
-    Base.metadata.create_all(bind=engine)
+    from app.db import session as db_session
+    from sqlalchemy.orm import sessionmaker
+    Base.metadata.create_all(bind=db_session.engine)
 
-    db = SessionLocal()
+    TestSession = sessionmaker(bind=db_session.engine)
+    db = TestSession()
     try:
         user = db.query(User).filter(User.id == 1).first()
         if not user:
@@ -142,12 +144,12 @@ def test_ingestion_temp_file_cleanup(monkeypatch, tmp_path):
             run_ingestion_pipeline(doc_id)
 
     # Check that document is marked failed and cleanup finished
-    db = SessionLocal()
+    db2 = TestSession()
     try:
-        updated_doc = db.query(Document).filter(Document.id == doc_id).first()
+        updated_doc = db2.query(Document).filter(Document.id == doc_id).first()
         assert updated_doc.status == "failed"
         assert "Corrupt PDF file" in (updated_doc.error_message or "")
     finally:
-        db.delete(updated_doc)
-        db.commit()
-        db.close()
+        db2.delete(updated_doc)
+        db2.commit()
+        db2.close()

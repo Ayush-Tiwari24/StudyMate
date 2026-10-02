@@ -69,34 +69,40 @@ class TestPgvectorStore:
         with test_engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
             conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS chunk_vectors (
-                    id TEXT PRIMARY KEY,
-                    user_id INTEGER NOT NULL,
-                    document_id INTEGER NOT NULL,
-                    filename TEXT,
-                    page INTEGER,
-                    chunk_index INTEGER,
-                    content TEXT NOT NULL,
-                    embedding vector(384) NOT NULL
-                );
-            """))
-            conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS vector_meta (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
             """))
-            conn.execute(text("TRUNCATE TABLE chunk_vectors;"))
             conn.execute(text("""
                 INSERT INTO vector_meta (key, value)
                 VALUES ('embedding_model', :model), ('embedding_dim', '384')
                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
             """), {"model": settings.embedding_model})
 
+            # Insert a test user (id=10) and document (id=1) so FK constraints pass.
+            # Uses ON CONFLICT DO NOTHING so re-runs are safe.
+            conn.execute(text("""
+                INSERT INTO users (id, name, email, password_hash, created_at)
+                VALUES (10, 'pgvector_test', 'pgvector_test@example.com', 'hashed_test', NOW())
+                ON CONFLICT (id) DO NOTHING;
+            """))
+            conn.execute(text("""
+                INSERT INTO documents (id, user_id, filename, file_path, file_hash, status, uploaded_at)
+                VALUES (1, 10, 'cs.pdf', '/tmp/cs.pdf', 'testhash1234567890abcdef1234567890abcdef1234', 'ready', NOW())
+                ON CONFLICT (id) DO NOTHING;
+            """))
+
+            # Clear any leftover vectors from a previous failed run
+            conn.execute(text("DELETE FROM chunk_vectors WHERE id IN ('doc_1_c_0', 'doc_1_c_1');"))
+
         yield test_engine
 
+        # Cleanup: delete inserted test rows (CASCADE removes chunk_vectors too)
         with test_engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE chunk_vectors;"))
+            conn.execute(text("DELETE FROM chunk_vectors WHERE id IN ('doc_1_c_0', 'doc_1_c_1');"))
+            conn.execute(text("DELETE FROM documents WHERE id = 1 AND user_id = 10;"))
+            conn.execute(text("DELETE FROM users WHERE id = 10;"))
 
         test_engine.dispose()
         db_session.engine = orig_engine
