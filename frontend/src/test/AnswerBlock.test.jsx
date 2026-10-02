@@ -75,4 +75,24 @@ describe('AnswerBlock component', () => {
     expect(screen.getByText(/data_structures\.pdf/)).toBeInTheDocument();
     expect(screen.getByText(/· p\.88/)).toBeInTheDocument();
   });
+
+  it('handles multiple grouped citations like [1, 2] in tables', () => {
+    const handleSelectCitation = vi.fn();
+    render(
+      <AnswerBlock
+        question="Definitions table"
+        answer="| Concept | Source |\n|---|---|\n| Recurrence | [1, 2] |"
+        sources={mockSources}
+        onSelectCitation={handleSelectCitation}
+      />
+    );
+
+    const cite1 = screen.getByRole('button', { name: /Source 1/i });
+    const cite2 = screen.getByRole('button', { name: /Source 2/i });
+    expect(cite1).toBeInTheDocument();
+    expect(cite2).toBeInTheDocument();
+
+    fireEvent.click(cite2);
+    expect(handleSelectCitation).toHaveBeenCalledWith(mockSources[1], 2);
+  });
 });

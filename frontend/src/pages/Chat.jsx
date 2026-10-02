@@ -99,9 +99,20 @@ export default function Chat() {
         const res = await getChat(chatId);
         currentChatRef.current = res.data;
         setCurrentChat(res.data);
-        setMessages(res.data.messages || []);
+        const msgs = res.data.messages || [];
+        setMessages(msgs);
         if (res.data.document_ids && res.data.document_ids.length > 0) {
           setSelectedDocIds(res.data.document_ids);
+        }
+        // Initialize activeSources from the most recent assistant message with sources
+        if (msgs.length > 0) {
+          const lastWithSources = [...msgs]
+            .reverse()
+            .find((m) => m.role === 'assistant' && m.sources && m.sources.length > 0);
+          if (lastWithSources) {
+            setActiveSources(lastWithSources.sources);
+            setActiveCitationIndex(1);
+          }
         }
       } catch (err) {
         console.error('Failed to load chat session:', err);
@@ -208,14 +219,39 @@ export default function Chat() {
   };
 
   // Open citation in source panel
-  const handleSelectCitation = (source, index) => {
-    if (source) {
-      // Find source index in activeSources
-      const idx = activeSources.findIndex((s) => s.id === source.id || (s.file === source.file && s.page === source.page));
-      setActiveCitationIndex(idx !== -1 ? idx + 1 : index || 1);
-    } else {
-      setActiveCitationIndex(index || 1);
+  const handleSelectCitation = (source, index, messageSources = []) => {
+    let listToUse = [];
+    if (messageSources && messageSources.length > 0) {
+      listToUse = messageSources;
+    } else if (activeSources && activeSources.length > 0) {
+      listToUse = activeSources;
+    } else if (source) {
+      listToUse = [source];
     }
+
+    if (listToUse.length > 0) {
+      setActiveSources(listToUse);
+    }
+
+    let targetIndex = index || 1;
+    if (source && listToUse.length > 0) {
+      const idx = listToUse.findIndex(
+        (s) =>
+          (s.id && source.id && s.id === source.id) ||
+          (s.file === source.file && s.page === source.page) ||
+          (s.snippet && source.snippet && s.snippet === source.snippet)
+      );
+      if (idx !== -1) {
+        targetIndex = idx + 1;
+      }
+    }
+
+    if (listToUse.length > 0) {
+      if (targetIndex < 1) targetIndex = 1;
+      if (targetIndex > listToUse.length) targetIndex = listToUse.length;
+    }
+
+    setActiveCitationIndex(targetIndex);
     setSourcePanelOpen(true);
     if (isMobile) {
       setMobileTab('source');
@@ -346,6 +382,8 @@ export default function Chat() {
                 navigate('/chat');
                 setMessages([]);
                 setCurrentChat(null);
+                setActiveSources([]);
+                setSourcePanelOpen(false);
                 if (isMobile) setMobileTab('answer');
               }}
               className="h-full"
@@ -413,7 +451,9 @@ export default function Chat() {
                   question={ex.question}
                   answer={ex.answer}
                   sources={ex.sources}
-                  onSelectCitation={handleSelectCitation}
+                  onSelectCitation={(src, idx, allSources) =>
+                    handleSelectCitation(src, idx, allSources || ex.sources)
+                  }
                   onRetry={() => handleSendQuestion(ex.question)}
                   onSelectMoreDocuments={() => {
                     if (isMobile) setMobileTab('shelf');

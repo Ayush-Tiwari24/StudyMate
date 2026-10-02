@@ -38,7 +38,11 @@ export default function FootnoteMarker({
     >
       <button
         type="button"
-        onClick={() => onClick && onClick(source, index)}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick && onClick(source, index);
+        }}
         className="footnote-cite inline-flex items-center justify-center font-semibold text-[var(--accent)] hover:underline px-0.5 cursor-pointer align-super text-xs leading-none transition-colors"
         aria-label={`Source ${index}: ${fileName}, page ${source?.page || ''}`}
         title={`${fileName} · ${page}`}

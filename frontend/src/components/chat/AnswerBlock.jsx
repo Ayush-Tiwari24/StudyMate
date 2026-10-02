@@ -23,8 +23,19 @@ export default function AnswerBlock({
       answer.toLowerCase().includes('nothing in your notes covers this') ||
       answer.toLowerCase().includes('nothing in your selected notes covers this'));
 
-  // Convert plain text [1], [2] to citation markdown links [1](#cite-1)
-  const processedAnswer = (answer || '').replace(/\[(\d+)\]/g, '[$1](#cite-$1)');
+  // Normalize citations: [1], [^1], [1, 2], [1,2,3] -> [1](#cite-1), [2](#cite-2)
+  const processAnswerText = (text) => {
+    if (!text) return '';
+    let formatted = text.replace(/\[\^(\d+)\]/g, '[$1]');
+    formatted = formatted.replace(/\[([\d,\s]+)\]/g, (match, inner) => {
+      const numbers = inner.split(',').map((n) => n.trim()).filter((n) => /^\d+$/.test(n));
+      if (numbers.length === 0) return match;
+      return numbers.map((n) => `[${n}](#cite-${n})`).join(', ');
+    });
+    return formatted;
+  };
+
+  const processedAnswer = processAnswerText(answer);
 
   return (
     <article className="flex flex-col gap-2.5 pb-8 border-b border-[var(--line-subtle)] last:border-b-0">
@@ -79,7 +90,7 @@ export default function AnswerBlock({
         {!isNotFound && sources && sources.length > 0 && (
           <FootnoteList
             sources={sources}
-            onSelectCitation={onSelectCitation}
+            onSelectCitation={(src, idx) => onSelectCitation && onSelectCitation(src, idx, sources)}
           />
         )}
 

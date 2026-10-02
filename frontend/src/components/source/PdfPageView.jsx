@@ -23,7 +23,14 @@ export default function PdfPageView({
       return;
     }
 
+    if (!documentId) {
+      setLoadError('Source document not available.');
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
+    let objectUrl = null;
     setLoading(true);
     setLoadError(null);
 
@@ -45,8 +52,8 @@ export default function PdfPageView({
       })
       .then((blob) => {
         if (isMounted) {
-          const url = URL.createObjectURL(blob);
-          setBlobUrl(url);
+          objectUrl = URL.createObjectURL(blob);
+          setBlobUrl(objectUrl);
           setLoading(false);
         }
       })
@@ -59,7 +66,7 @@ export default function PdfPageView({
 
     return () => {
       isMounted = false;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [documentId, isRemoved]);
 

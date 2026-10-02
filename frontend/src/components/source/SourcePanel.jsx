@@ -15,10 +15,12 @@ export default function SourcePanel({
   const [fullPage, setFullPage] = useState(false);
 
   useEffect(() => {
-    if (activeCitationIndex) {
+    if (activeCitationIndex && activeCitationIndex >= 1 && activeCitationIndex <= (sources.length || 1)) {
       setCurrentIndex(activeCitationIndex);
+    } else if (sources.length > 0) {
+      setCurrentIndex((prev) => (prev > sources.length || prev < 1 ? 1 : prev));
     }
-  }, [activeCitationIndex]);
+  }, [activeCitationIndex, sources.length]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -58,10 +60,10 @@ export default function SourcePanel({
     );
   }
 
-  const selectedSource = sources[currentIndex - 1] || sources[0];
+  const selectedSource = sources[currentIndex - 1] || sources[0] || {};
   const fileName = selectedSource.file || selectedSource.filename || 'Source Document';
   const pageNum = selectedSource.page;
-  const docId = selectedSource.document_id;
+  const docId = selectedSource.document_id || selectedSource.documentId || selectedSource.doc_id;
   const isRemoved = selectedSource.is_removed || false;
 
   return (
