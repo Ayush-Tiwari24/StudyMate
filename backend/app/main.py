@@ -117,9 +117,30 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Could not pre-warm embedding model: {e}")
 
+    # Start background keep-alive task for Neon serverless postgres to eliminate cold starts
+    keepalive_task = None
+    if not settings.database_url.startswith("sqlite"):
+        async def keep_neon_alive():
+            from sqlalchemy import text
+            from app.db.session import engine
+            while True:
+                try:
+                    await asyncio.sleep(180)  # Ping every 3 mins to keep Neon compute & pool warm
+                    with engine.connect() as conn:
+                        conn.execute(text("SELECT 1;"))
+                except asyncio.CancelledError:
+                    break
+                except Exception:
+                    pass
+
+        keepalive_task = asyncio.create_task(keep_neon_alive())
+        logger.info("Neon database keep-alive background task started.")
+
     yield
 
     # ── Shutdown ──
+    if keepalive_task:
+        keepalive_task.cancel()
     logger.info("Shutting down...")
 
 
