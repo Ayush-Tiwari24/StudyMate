@@ -21,6 +21,7 @@ from app.db.session import get_db
 import app.db.session as session_module
 from app.models.user import User
 from app.models.document import Document
+from app.core.config import settings
 from app.services.storage import get_storage
 
 TEST_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "test_file_route.db"
@@ -130,7 +131,7 @@ def test_storage_usage_endpoints():
     assert usage_res1.status_code == 200
     data1 = usage_res1.json()
     assert data1["used_bytes"] == 0
-    assert data1["quota_mb"] == 50
+    assert data1["quota_mb"] == settings.user_storage_quota_mb
     assert data1["percent_used"] == 0.0
 
     # Upload document
@@ -147,18 +148,18 @@ def test_storage_usage_endpoints():
     data2 = usage_res2.json()
     assert data2["used_bytes"] == len(pdf_bytes)
     assert data2["used_mb"] >= 0.0
-    assert data2["quota_bytes"] == 50 * 1024 * 1024
+    assert data2["quota_bytes"] == settings.user_storage_quota_bytes
 
     # GET /api/documents list should also include storage fields
     list_res = client.get("/api/documents", headers=headers)
     assert list_res.status_code == 200
     list_data = list_res.json()
     assert list_data["storage_used_bytes"] == len(pdf_bytes)
-    assert list_data["storage_quota_mb"] == 50
+    assert list_data["storage_quota_mb"] == settings.user_storage_quota_mb
 
     # GET /api/auth/me should also include storage fields
     me_res = client.get("/api/auth/me", headers=headers)
     assert me_res.status_code == 200
     me_data = me_res.json()
     assert me_data["storage_used_bytes"] == len(pdf_bytes)
-    assert me_data["storage_quota_bytes"] == 50 * 1024 * 1024
+    assert me_data["storage_quota_bytes"] == settings.user_storage_quota_bytes
