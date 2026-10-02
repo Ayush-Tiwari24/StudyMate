@@ -49,3 +49,9 @@ export const getDocumentFileUrl = (documentId) => {
     : '/api';
   return `${base}/documents/${documentId}/file`;
 };
+
+export const fetchDocumentBlob = (documentId) => {
+  return client.get(`/documents/${documentId}/file`, {
+    responseType: 'blob',
+  });
+};

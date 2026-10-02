@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getToken } from '../../api/client';
-import { getDocumentFileUrl } from '../../api/documents';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { fetchDocumentBlob } from '../../api/documents';
 import HighlightOverlay from './HighlightOverlay';
+
+// In-memory cache for downloaded PDF blobs (documentId -> objectUrl)
+const blobUrlCache = new Map();
 
 export default function PdfPageView({
   documentId,
@@ -11,14 +13,14 @@ export default function PdfPageView({
   query = '',
   isRemoved = false,
 }) {
-  const [blobUrl, setBlobUrl] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [blobUrl, setBlobUrl] = useState(() => (documentId ? blobUrlCache.get(documentId) || null : null));
+  const [loading, setLoading] = useState(() => !blobUrlCache.has(documentId));
   const [loadError, setLoadError] = useState(null);
   const containerRef = useRef(null);
 
-  useEffect(() => {
+  const loadPdf = useCallback(async (force = false) => {
     if (isRemoved) {
-      setLoadError('This source was removed.');
+      setLoadError('This source document was removed.');
       setLoading(false);
       return;
     }
@@ -29,46 +31,40 @@ export default function PdfPageView({
       return;
     }
 
-    let isMounted = true;
-    let objectUrl = null;
+    if (!force && blobUrlCache.has(documentId)) {
+      setBlobUrl(blobUrlCache.get(documentId));
+      setLoading(false);
+      setLoadError(null);
+      return;
+    }
+
     setLoading(true);
     setLoadError(null);
 
-    const fileUrl = getDocumentFileUrl(documentId);
-    const token = getToken();
-
-    // Fetch PDF as Blob using auth header
-    fetch(fileUrl, {
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    })
-      .then((res) => {
-        if (!res.ok) {
-          if (res.status === 404) throw new Error('This source was removed.');
-          throw new Error('Unable to load source PDF.');
-        }
-        return res.blob();
-      })
-      .then((blob) => {
-        if (isMounted) {
-          objectUrl = URL.createObjectURL(blob);
-          setBlobUrl(objectUrl);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setLoadError(err.message || 'Unable to load page.');
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    try {
+      const res = await fetchDocumentBlob(documentId);
+      const url = URL.createObjectURL(res.data);
+      blobUrlCache.set(documentId, url);
+      setBlobUrl(url);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Failed to load PDF blob:', err);
+      const status = err.response?.status;
+      if (status === 404) {
+        setLoadError('This source document is not found on the server.');
+      } else if (status === 401) {
+        setLoadError('Authentication required to view document.');
+      } else {
+        setLoadError(err.message || 'Unable to load source PDF preview.');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [documentId, isRemoved]);
+
+  useEffect(() => {
+    loadPdf();
+  }, [loadPdf]);
 
   // Function to highlight query terms in snippet text
   const renderHighlightedSnippet = (text, searchQuery) => {
@@ -102,21 +98,13 @@ export default function PdfPageView({
     }
   };
 
-  if (isRemoved || loadError === 'This source was removed.') {
-    return (
-      <div className="p-8 text-center text-sm text-[var(--muted)] font-sans">
-        This source was removed.
-      </div>
-    );
-  }
-
   return (
     <div ref={containerRef} className="flex flex-col gap-4 w-full">
       {/* Evidence passage excerpt card with yellow highlight */}
       <div className="p-4 bg-[var(--paper)] border border-[var(--line)] rounded-[6px]">
         <div className="font-mono text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2 flex items-center justify-between">
           <span>Cited passage</span>
-          <span>Page {pageNumber}</span>
+          <span>Page {pageNumber || '?'}</span>
         </div>
         <div className="font-serif text-sm leading-relaxed text-[var(--ink)]">
           {snippet ? (
@@ -130,8 +118,9 @@ export default function PdfPageView({
       {/* PDF View or preview container */}
       <div className="relative border border-[var(--line)] rounded-[6px] overflow-hidden bg-white shadow-sm min-h-[360px] flex items-center justify-center">
         {loading ? (
-          <div className="p-8 text-center text-xs text-[var(--muted)] font-mono">
-            Reading page {pageNumber}…
+          <div className="p-8 text-center text-xs text-[var(--muted)] font-mono flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
+            <span>Reading page {pageNumber}…</span>
           </div>
         ) : blobUrl ? (
           <div className="relative w-full h-[480px]">
@@ -149,8 +138,17 @@ export default function PdfPageView({
             )}
           </div>
         ) : (
-          <div className="p-6 text-center text-xs text-[var(--muted)]">
-            {loadError || 'Unable to render original page preview.'}
+          <div className="p-6 text-center text-xs text-[var(--muted)] flex flex-col items-center gap-2">
+            <span>{isRemoved ? 'This source document was removed.' : (loadError || 'Unable to render original page preview.')}</span>
+            {!isRemoved && (
+              <button
+                type="button"
+                onClick={() => loadPdf(true)}
+                className="mt-2 px-3 py-1 rounded bg-[var(--surface-muted)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--ink)] font-mono text-[11px] transition-colors"
+              >
+                Retry loading PDF
+              </button>
+            )}
           </div>
         )}
       </div>
