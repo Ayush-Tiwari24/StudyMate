@@ -60,8 +60,9 @@ class TestPgvectorStore:
         from sqlalchemy import create_engine, text
         from app.db import session as db_session
 
+        from app.db.session import normalize_database_url
         orig_engine = db_session.engine
-        test_engine = create_engine(TEST_DB_URL)
+        test_engine = create_engine(normalize_database_url(TEST_DB_URL))
         db_session.engine = test_engine
         monkeypatch.setattr(settings, "vector_backend", "pgvector")
         monkeypatch.setattr(settings, "embedding_dim", 384)

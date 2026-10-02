@@ -19,10 +19,6 @@ def isolate_test_environment():
     Tests that need live Postgres should supply their own TEST_DATABASE_URL
     override (see test_pgvector_store.py and test_neon_connection.py).
     """
-    import os
-    from app.db import session as db_session
-    from app.db.base import Base
-    from sqlalchemy import create_engine
 
     temp_dir = Path(tempfile.mkdtemp(prefix="studymate_test_"))
     test_raw_pdfs = temp_dir / "raw_pdfs"
@@ -51,16 +47,9 @@ def isolate_test_environment():
 
     get_chroma_client.cache_clear()
 
-    # Replace the module-level engine with a test SQLite engine
-    orig_engine = db_session.engine
-    test_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=test_engine)
-    db_session.engine = test_engine
-
     yield
 
-    # Restore all original settings and engine
-    db_session.engine = orig_engine
+    # Restore all original settings
     settings.upload_dir = orig_upload_dir
     settings.vector_store_dir = orig_vector_store_dir
     settings.database_url = orig_database_url
@@ -70,5 +59,4 @@ def isolate_test_environment():
     settings.auto_create_tables = orig_auto_create_tables
 
     get_chroma_client.cache_clear()
-    test_engine.dispose()
     shutil.rmtree(temp_dir, ignore_errors=True)
