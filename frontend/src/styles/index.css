@@ -179,31 +179,102 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   font-weight: 600;
 }
 
-.prose-answer table, .desk-prose-answer table {
+/* Table Styles */
+.prose-answer .table-wrapper,
+.desk-prose-answer .table-wrapper {
   width: 100%;
-  border-collapse: collapse;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   margin: 1.25rem 0;
-  font-size: 0.925rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
 }
 
-.prose-answer th, .desk-prose-answer th {
+.prose-answer table,
+.desk-prose-answer table {
+  width: 100%;
+  min-width: 580px;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.prose-answer th,
+.desk-prose-answer th {
   background-color: var(--surface-muted);
-  border: 1px solid var(--line);
-  padding: 0.6rem 0.85rem;
+  border-bottom: 2px solid var(--line);
+  border-right: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 1rem;
   text-align: left;
   font-weight: 600;
   font-family: var(--font-sans);
   color: var(--ink);
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  letter-spacing: 0.01em;
 }
 
-.prose-answer td, .desk-prose-answer td {
-  border: 1px solid var(--line);
-  padding: 0.55rem 0.85rem;
+.prose-answer th:first-child,
+.desk-prose-answer th:first-child {
+  border-left: 1px solid var(--line);
+}
+
+.prose-answer th:last-child,
+.desk-prose-answer th:last-child {
+  border-right: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap !important;
+  width: 1%;
+  min-width: 90px;
+}
+
+.prose-answer td,
+.desk-prose-answer td {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 0.75rem 1rem;
   color: var(--ink);
+  vertical-align: top;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
-.prose-answer tr:nth-child(even) td, .desk-prose-answer tr:nth-child(even) td {
+.prose-answer td:first-child,
+.desk-prose-answer td:first-child {
+  border-left: 1px solid var(--line);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  min-width: 140px;
+}
+
+.prose-answer td:last-child,
+.desk-prose-answer td:last-child {
+  border-right: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap !important;
+  width: 1%;
+  min-width: 90px;
+}
+
+.prose-answer td:not(:first-child):not(:last-child),
+.desk-prose-answer td:not(:first-child):not(:last-child) {
+  min-width: 260px;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.prose-answer tr:nth-child(even) td,
+.desk-prose-answer tr:nth-child(even) td {
   background-color: var(--surface-muted);
+}
+
+.prose-answer tr:hover td,
+.desk-prose-answer tr:hover td {
+  background-color: var(--surface-hover);
 }
 
 .prose-answer blockquote, .desk-prose-answer blockquote {

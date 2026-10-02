@@ -55,6 +55,36 @@ export default function AnswerBlock({
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
+                table: ({ node, ...props }) => (
+                  <div className="table-wrapper">
+                    <table {...props} />
+                  </div>
+                ),
+                td: ({ node, children, ...props }) => {
+                  const formatCellChild = (child) => {
+                    if (typeof child === 'string' && (/<br\s*\/?>/i.test(child) || /\\n/.test(child))) {
+                      const parts = child.replace(/\\n/g, '<br/>').split(/<br\s*\/?>/gi);
+                      return parts.map((part, idx) => (
+                        <React.Fragment key={idx}>
+                          {idx > 0 && <br />}
+                          {part}
+                        </React.Fragment>
+                      ));
+                    }
+                    return child;
+                  };
+
+                  const formatted = React.Children.map(children, (c) => {
+                    if (React.isValidElement(c) && c.props && c.props.children) {
+                      return React.cloneElement(c, {
+                        children: React.Children.map(c.props.children, formatCellChild),
+                      });
+                    }
+                    return formatCellChild(c);
+                  });
+
+                  return <td {...props}>{formatted}</td>;
+                },
                 a: ({ href, children }) => {
                   if (href && href.startsWith('#cite-')) {
                     const index = parseInt(href.replace('#cite-', ''), 10);

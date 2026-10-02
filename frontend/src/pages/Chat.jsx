@@ -479,7 +479,16 @@ export default function Chat() {
                       </div>
                     ) : (
                       <div className="prose-answer">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            table: ({ node, ...props }) => (
+                              <div className="table-wrapper">
+                                <table {...props} />
+                              </div>
+                            ),
+                          }}
+                        >
                           {streamedText}
                         </ReactMarkdown>
                       </div>
