@@ -80,8 +80,8 @@ For architectural diagrams and database entity relationships, see:
    AUTO_CREATE_TABLES=false
    VECTOR_BACKEND=pgvector
    STORAGE_BACKEND=db
-   MAX_UPLOAD_MB=10
-   USER_STORAGE_QUOTA_MB=50
+   MAX_UPLOAD_MB=30
+   USER_STORAGE_QUOTA_MB=100
    GLOBAL_STORAGE_CAP_MB=400
    LLM_PROVIDER=groq
    GROQ_API_KEY=gsk_...
@@ -120,9 +120,9 @@ Once deployed, verify full end-to-end functionality:
   - `GET https://<render-url>/api/health/ready` returns `{"status": "ready"}`.
 - [ ] **User Registration**: Register a new student account at `https://<vercel-url>/register`.
 - [ ] **Storage Display**:
-  - Verify storage usage widget displays on Dashboard and Settings ("0 MB of 50 MB used").
+  - Verify storage usage widget displays on Dashboard and Settings ("0 MB of 100 MB used").
 - [ ] **PDF Upload & Ingestion**:
-  - Upload a course PDF (up to 10 MB).
+  - Upload a course PDF (up to 30 MB).
   - Verify database: check that rows exist in `stored_files` (`bytea`), `documents`, `chunks`, and `chunk_vectors`.
   - Status updates to `ready` (100%).
   - Storage progress updates accurately.

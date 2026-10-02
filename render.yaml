@@ -43,7 +43,7 @@ services:
 
       # Storage Limits
       - key: MAX_UPLOAD_MB
-        value: "10"
+        value: "30"
       - key: USER_STORAGE_QUOTA_MB
         value: "100"
       - key: GLOBAL_STORAGE_CAP_MB

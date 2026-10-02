@@ -38,16 +38,16 @@ Every 10 MB of uploaded PDF consumes approximately **13.5 MB to 14.5 MB** of Neo
 
 Neon's Free Tier includes **0.5 GB (512 MB)** of storage shared across the entire database project. Exceeding this limit causes Neon to suspend the database, resulting in total application downtime. StudyMate implements a multi-tier defense:
 
-### A. Per-File Limit (`MAX_UPLOAD_MB = 10`)
-- **Default**: 10 MB
-- **Rationale**: High-yield lecture notes, problem sets, and textbook chapters easily fit within 10 MB while preventing oversized scanned books from overwhelming memory or storage.
-- **Error**: `HTTP 413 — File exceeds maximum size of 10 MB.`
+### A. Per-File Limit (`MAX_UPLOAD_MB = 30`)
+- **Default**: 30 MB
+- **Rationale**: High-yield lecture notes, problem sets, and textbook chapters easily fit within 30 MB while preventing oversized scanned books from overwhelming memory or storage.
+- **Error**: `HTTP 413 — File exceeds maximum size of 30 MB.`
 
-### B. Per-User Quota (`USER_STORAGE_QUOTA_MB = 50`)
-- **Default**: 50 MB
+### B. Per-User Quota (`USER_STORAGE_QUOTA_MB = 100`)
+- **Default**: 100 MB
 - **Configured via**: `USER_STORAGE_QUOTA_MB` env var
-- **Rationale**: Allows an individual student to store 5–10 chapters of course notes.
-- **UI Display**: Shown on both Dashboard and Settings page as `"12 MB of 50 MB used"` with an accessible visual progress bar.
+- **Rationale**: Allows an individual student to store multiple textbooks and lecture notes.
+- **UI Display**: Shown on both Dashboard and Settings page as `"12 MB of 100 MB used"` with an accessible visual progress bar.
 - **Warning Threshold**: Turns into an amber warning when usage reaches **>= 80%**.
 - **Block Threshold**: Blocks uploads when usage reaches **100%**.
 - **Error**: `HTTP 413 — You've used all your storage. Delete a document to add more.`

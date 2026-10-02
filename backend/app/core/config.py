@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     s3_access_key: str = ""
     s3_secret_key: str = ""
     s3_region: str = "us-east-1"
-    max_upload_mb: int = 10
+    max_upload_mb: int = 30
     user_storage_quota_mb: int = 100
     global_storage_cap_mb: int = 400
 

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { BookOpen, AlertCircle, Check, HardDrive } from 'lucide-react';
 
-const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_MB = 30;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 export default function UploadDropzone({ onUploadSuccess, storage, className = '' }) {
@@ -61,7 +61,7 @@ export default function UploadDropzone({ onUploadSuccess, storage, className = '
       return;
     }
 
-    // Validate size (10MB)
+    // Validate size (30MB)
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setErrorMessage(`File exceeds the ${MAX_FILE_SIZE_MB}MB limit.`);
       return;
@@ -150,7 +150,7 @@ export default function UploadDropzone({ onUploadSuccess, storage, className = '
           <span className="text-xs text-[var(--muted)] font-sans">
             {isStorageFull
               ? "You've used all your storage. Delete a document to add more."
-              : 'or click to browse your computer (PDF up to 10MB)'}
+              : 'or click to browse your computer (PDF up to 30MB)'}
           </span>
         </div>
 
