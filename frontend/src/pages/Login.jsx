@@ -35,11 +35,6 @@ export default function Login() {
     }
   };
 
-  const handleDemoFill = (demoEmail, demoPass) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--paper)] p-4 select-none">
       <div className="w-full max-w-sm bg-[var(--surface)] border border-[var(--line)] rounded-[6px] shadow-sm p-8 flex flex-col gap-6">
@@ -105,29 +100,6 @@ export default function Login() {
             {loading ? 'Opening reading desk…' : 'Sign in'}
           </button>
         </form>
-
-        {/* Demo Credentials */}
-        <div className="pt-4 border-t border-[var(--line-subtle)] flex flex-col gap-2">
-          <span className="text-[11px] font-mono text-[var(--muted)] text-center">
-            Quick demo credentials:
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleDemoFill('student@example.com', 'student123')}
-              className="py-1 px-2 rounded-[4px] border border-[var(--line)] bg-[var(--surface-muted)] hover:bg-[var(--surface-hover)] text-[11px] font-sans text-[var(--ink)] text-center transition-colors"
-            >
-              Demo Student
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoFill('amit@university.edu', 'password123')}
-              className="py-1 px-2 rounded-[4px] border border-[var(--line)] bg-[var(--surface-muted)] hover:bg-[var(--surface-hover)] text-[11px] font-sans text-[var(--ink)] text-center transition-colors"
-            >
-              Prof. Amit
-            </button>
-          </div>
-        </div>
 
         <div className="text-center text-xs text-[var(--muted)]">
           Don't have an account?{' '}
