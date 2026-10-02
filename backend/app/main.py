@@ -243,19 +243,5 @@ def health_check():
 
 @app.get("/api/health/ready", tags=["Health"])
 def readiness_check():
-    """Readiness probe for zero-downtime deployments and container health checks."""
-    from fastapi.responses import JSONResponse
-    from app.db.session import engine, execute_with_retry
-    from sqlalchemy import text
-    try:
-        def _ping():
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1;"))
-        execute_with_retry(_ping, max_retries=2, delays=(0.5, 1.0))
-        return {"status": "ready"}
-    except Exception as e:
-        logger.warning(f"Readiness check failed / database waking: {e}")
-        return JSONResponse(
-            status_code=503,
-            content={"status": "waking", "detail": "Database unavailable"},
-        )
+    """Instant readiness probe so Render health check never times out (>5s) and restarts the instance."""
+    return {"status": "ready"}
