@@ -102,7 +102,6 @@ export default function History() {
   return (
     <div className="flex-1 overflow-y-auto bg-[var(--paper)] p-6 md:p-10">
       <div className="max-w-4xl mx-auto flex flex-col gap-8">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
           <div>
             <h1 className="font-serif text-2xl md:text-3xl font-semibold text-[var(--ink)] tracking-tight">
@@ -113,7 +112,6 @@ export default function History() {
             </p>
           </div>
 
-          {/* Search */}
           <div className="flex items-center gap-2 bg-[var(--surface)] border border-[var(--line)] rounded-[6px] px-3 py-1.5 w-full max-w-xs shadow-xs focus-within:border-[var(--accent)] transition-colors">
             <Search size={14} className="text-[var(--muted)]" />
             <input

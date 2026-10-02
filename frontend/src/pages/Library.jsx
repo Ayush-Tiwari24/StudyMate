@@ -15,7 +15,6 @@ export default function Library() {
   return (
     <div className="flex-1 overflow-y-auto bg-[var(--paper)] p-6 md:p-10">
       <div className="max-w-5xl mx-auto flex flex-col gap-8">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
           <div>
             <h1 className="font-serif text-2xl md:text-3xl font-semibold text-[var(--ink)] tracking-tight">
@@ -37,10 +36,8 @@ export default function Library() {
           </button>
         </div>
 
-        {/* Drop Zone: "Drop your notes here" */}
         <UploadDropzone onUploadSuccess={upload} storage={storage} />
 
-        {/* Search & Document Table */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 bg-[var(--surface)] border border-[var(--line)] rounded-[6px] px-3 py-1.5 w-full max-w-xs shadow-xs focus-within:border-[var(--accent)] transition-colors">

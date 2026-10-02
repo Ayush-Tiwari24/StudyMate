@@ -77,7 +77,6 @@ export default function Notes() {
   return (
     <div className="flex-1 overflow-y-auto bg-[var(--paper)] p-6 md:p-10">
       <div className="max-w-4xl mx-auto flex flex-col gap-8">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
           <div>
             <h1 className="font-serif text-2xl md:text-3xl font-semibold text-[var(--ink)] tracking-tight">
@@ -101,7 +100,6 @@ export default function Notes() {
           </div>
         </div>
 
-        {/* Filter Bar */}
         {docNames.length > 0 && (
           <div className="flex items-center gap-2 text-xs">
             <span className="text-[var(--muted)]">Filter by document:</span>
@@ -120,7 +118,6 @@ export default function Notes() {
           </div>
         )}
 
-        {/* Notes List */}
         {filteredNotes.length === 0 ? (
           <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-12 text-center flex flex-col items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[var(--surface-muted)] flex items-center justify-center text-[var(--muted)]">
@@ -146,7 +143,6 @@ export default function Notes() {
                 key={note.id}
                 className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-6 sm:p-8 shadow-sm flex flex-col gap-5 hover:border-[var(--line-subtle)] transition-all"
               >
-                {/* Note Header */}
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
                   <div className="flex flex-col gap-1.5 flex-1">
                     <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--muted)] font-mono">
@@ -164,7 +160,6 @@ export default function Notes() {
                     </h3>
                   </div>
 
-                  {/* Actions: Copy and Delete */}
                   <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-start">
                     <button
                       onClick={() => handleCopyNote(note)}
@@ -193,7 +188,6 @@ export default function Notes() {
                   </div>
                 </div>
 
-                {/* Markdown Answer */}
                 <div className="prose-answer text-[15px] sm:text-base leading-relaxed text-[var(--ink)]">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
@@ -227,7 +221,6 @@ export default function Notes() {
                   </ReactMarkdown>
                 </div>
 
-                {/* Citations Footer */}
                 {note.sources && note.sources.length > 0 && (
                   <div className="pt-4 border-t border-[var(--line-subtle)] flex flex-col gap-2">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] font-semibold">

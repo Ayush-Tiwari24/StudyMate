@@ -46,7 +46,6 @@ export default function AnswerActions({
   return (
     <div className="flex items-center justify-between pt-3 border-t border-[var(--line-subtle)] text-xs text-[var(--muted)]">
       <div className="flex items-center gap-3">
-        {/* Keep / Save to notes */}
         <button
           type="button"
           onClick={handleKeep}
@@ -59,7 +58,6 @@ export default function AnswerActions({
           <span>{isSaved ? 'Saved to notes' : 'Keep'}</span>
         </button>
 
-        {/* Copy */}
         <button
           type="button"
           onClick={handleCopy}
@@ -70,7 +68,6 @@ export default function AnswerActions({
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
 
-        {/* Retry / Regenerate */}
         {onRetry && (
           <button
             type="button"
@@ -84,7 +81,6 @@ export default function AnswerActions({
         )}
       </div>
 
-      {/* Thumbs up / down feedback */}
       <div className="flex items-center gap-1">
         <button
           type="button"

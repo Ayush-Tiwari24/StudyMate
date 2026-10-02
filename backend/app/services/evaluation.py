@@ -24,11 +24,6 @@ def evaluate_rag(dataset_path: str = "evaluation/dataset.json") -> dict:
     """
     logger.info(f"Running evaluation on: {dataset_path}")
 
-    # TODO: Implement RAGAS evaluation
-    # 1. Load dataset
-    # 2. For each question, run the RAG pipeline
-    # 3. Compute metrics: faithfulness, answer relevancy, context precision/recall
-    # 4. Return metrics dict
 
     return {
         "status": "not_implemented",

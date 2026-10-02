@@ -17,7 +17,6 @@ export default function StorageBar({
 
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
-      {/* Label and text breakdown */}
       <div className="flex items-center justify-between gap-2 text-xs font-sans">
         <span className="text-[var(--muted)] flex items-center gap-1.5 font-medium">
           <HardDrive size={13} className="text-[var(--muted)]" />
@@ -36,7 +35,6 @@ export default function StorageBar({
         </span>
       </div>
 
-      {/* Accessible Progress Bar */}
       <div
         role="progressbar"
         aria-valuenow={Math.min(100, Math.round(percentUsed))}
@@ -57,7 +55,6 @@ export default function StorageBar({
         />
       </div>
 
-      {/* Warning / Error Messages */}
       {isFull ? (
         <div className="flex items-center gap-1.5 text-xs text-[var(--status-failed, #dc2626)] font-sans mt-0.5">
           <AlertCircle size={13} className="flex-shrink-0" />

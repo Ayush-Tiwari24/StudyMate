@@ -107,7 +107,6 @@ export default function Settings() {
   return (
     <div className="flex-1 overflow-y-auto bg-[var(--paper)] p-6 md:p-10">
       <div className="max-w-2xl mx-auto flex flex-col gap-8">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
           <div>
             <h1 className="font-serif text-2xl md:text-3xl font-semibold text-[var(--ink)] tracking-tight">
@@ -139,7 +138,6 @@ export default function Settings() {
               </div>
             )}
 
-            {/* Display & Reading Theme */}
             <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-5 flex flex-col gap-4 shadow-xs">
               <h2 className="font-serif text-base font-semibold text-[var(--ink)]">
                 Reading Display
@@ -192,7 +190,6 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* Text Size Scale */}
               <div className="flex flex-col gap-2 pt-3 border-t border-[var(--line-subtle)]">
                 <label className="text-xs font-medium text-[var(--muted)] font-sans">
                   Answer Text Size
@@ -223,7 +220,6 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Retrieval Engine */}
             <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-5 flex flex-col gap-4 shadow-xs">
               <h2 className="font-serif text-base font-semibold text-[var(--ink)]">
                 Retrieval Engine
@@ -300,7 +296,6 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Save Button */}
             <div className="flex justify-end">
               <button
                 type="submit"
@@ -313,7 +308,6 @@ export default function Settings() {
           </form>
         )}
 
-        {/* Storage & Quota Allocation */}
         {!loading && (
           <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-5 shadow-xs flex flex-col gap-3">
             <div>
@@ -334,7 +328,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Export Data */}
         {!loading && (
           <div className="bg-[var(--surface)] border border-[var(--line-subtle)] rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
             <div>
@@ -375,7 +368,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Danger Zone: Account Deletion */}
         {!loading && (
           <div className="bg-[var(--surface)] border border-rose-200 dark:border-rose-900/40 rounded-xl p-6 flex flex-col gap-4 shadow-xs">
             <div className="flex items-start justify-between gap-4">
@@ -403,7 +395,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Password Confirmation Modal for Account Deletion */}
         {showDeleteModal && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-[var(--surface)] border border-[var(--line-subtle)] rounded-xl max-w-md w-full p-6 shadow-xl flex flex-col gap-4">

@@ -96,7 +96,6 @@ export default function ChatInput({
         </div>
       </div>
 
-      {/* Persistent one-line note under input (Section 4.4) */}
       <p className="text-[11px] text-[var(--subtle)] font-sans text-center mt-2 select-none">
         Answers come only from your documents.
       </p>

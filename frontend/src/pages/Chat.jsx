@@ -373,7 +373,6 @@ export default function Chat() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--paper)]">
-      {/* Mobile Tab Bar (< 900px) */}
       {isMobile && (
         <div className="h-10 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-around text-xs font-mono select-none flex-shrink-0">
           <button
@@ -409,9 +408,7 @@ export default function Chat() {
         </div>
       )}
 
-      {/* Main Reading Desk Body */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* COLUMN 1: THE SHELF (Left) */}
         {(!isMobile || mobileTab === 'shelf') && (
           <div
             style={!isMobile && shelfOpen ? { width: `${shelfWidth}px` } : undefined}
@@ -440,7 +437,6 @@ export default function Chat() {
           </div>
         )}
 
-        {/* RESIZE HANDLE: SHELF (Left) */}
         {!isMobile && shelfOpen && (
           <div
             role="separator"
@@ -474,10 +470,8 @@ export default function Chat() {
           </div>
         )}
 
-        {/* COLUMN 2: THE ANSWER DESK (Center) */}
         {(!isMobile || mobileTab === 'answer') && (
           <main className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--paper)] min-w-0">
-            {/* Answer Desk Top Toolbar */}
             <div className="h-10 px-4 border-b border-[var(--line-subtle)] flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">
                 {!isMobile && (
@@ -506,9 +500,7 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* Scrollable Answers Area */}
             <div className="flex-1 overflow-y-auto px-4 md:px-12 py-6 flex flex-col gap-6">
-              {/* Empty State: Suggested Questions */}
               {messages.length === 0 && !isStreaming && (
                 <div className="my-auto max-w-2xl mx-auto w-full py-8">
                   <div className="text-center mb-8">
@@ -526,7 +518,6 @@ export default function Chat() {
                 </div>
               )}
 
-              {/* Completed Answer Exchanges */}
               {exchanges.map((ex, i) => (
                 <AnswerBlock
                   key={ex.id || i}
@@ -545,7 +536,6 @@ export default function Chat() {
                 />
               ))}
 
-              {/* Active Streaming Answer Block */}
               {isStreaming && (
                 <div className="flex flex-col gap-2.5 pb-8 animate-fadeIn">
                   {lastUserMessage && (
@@ -583,7 +573,6 @@ export default function Chat() {
               <div ref={scrollAnchorRef} />
             </div>
 
-            {/* Bottom Input Area */}
             <div className="p-4 bg-[var(--paper)] border-t border-[var(--line-subtle)] flex flex-col items-center flex-shrink-0">
               <ScopeChips
                 selectedDocIds={selectedDocIds}
@@ -604,7 +593,6 @@ export default function Chat() {
           </main>
         )}
 
-        {/* RESIZE HANDLE: EVIDENCE PANEL (Right) */}
         {!isMobile && sourcePanelOpen && (
           <div
             role="separator"
@@ -638,7 +626,6 @@ export default function Chat() {
           </div>
         )}
 
-        {/* COLUMN 3: THE SOURCE EVIDENCE (Right) */}
         {(!isMobile || mobileTab === 'source') && (
           <div
             style={!isMobile && sourcePanelOpen ? { width: `${sourceWidth}px` } : undefined}
@@ -666,7 +653,6 @@ export default function Chat() {
         )}
       </div>
 
-      {/* Keyboard Shortcuts Dialog Modal */}
       <KeyboardShortcutsModal
         isOpen={shortcutsModalOpen}
         onClose={() => setShortcutsModalOpen(false)}

@@ -50,7 +50,6 @@ export default function FootnoteMarker({
         {toSuperscript(index)}
       </button>
 
-      {/* Hover preview tooltip appearing after 200ms */}
       {hovered && (
         <span
           className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] rounded-[6px] shadow-sm text-xs font-sans pointer-events-none z-50 text-left leading-relaxed animate-fadeIn"

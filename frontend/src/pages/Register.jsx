@@ -43,7 +43,6 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--paper)] p-4 select-none">
       <div className="w-full max-w-sm bg-[var(--surface)] border border-[var(--line)] rounded-[6px] shadow-sm p-8 flex flex-col gap-6">
-        {/* Header */}
         <div className="text-center">
           <h1 className="font-serif text-3xl font-medium text-[var(--ink)] tracking-tight">
             StudyMate AI

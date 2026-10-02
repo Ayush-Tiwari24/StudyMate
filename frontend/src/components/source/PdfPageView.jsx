@@ -100,7 +100,6 @@ export default function PdfPageView({
 
   return (
     <div ref={containerRef} className="flex flex-col gap-4 w-full">
-      {/* Evidence passage excerpt card with yellow highlight */}
       <div className="p-4 bg-[var(--paper)] border border-[var(--line)] rounded-[6px]">
         <div className="font-mono text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2 flex items-center justify-between">
           <span>Cited passage</span>
@@ -115,7 +114,6 @@ export default function PdfPageView({
         </div>
       </div>
 
-      {/* PDF View or preview container */}
       <div className="relative border border-[var(--line)] rounded-[6px] overflow-hidden bg-white shadow-sm min-h-[360px] flex items-center justify-center">
         {loading ? (
           <div className="p-8 text-center text-xs text-[var(--muted)] font-mono flex items-center gap-2">

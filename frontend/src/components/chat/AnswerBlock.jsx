@@ -39,14 +39,12 @@ export default function AnswerBlock({
 
   return (
     <article className="flex flex-col gap-2.5 pb-8 border-b border-[var(--line-subtle)] last:border-b-0">
-      {/* Question as clean heading */}
       {question && (
         <h2 className="font-sans text-xl font-semibold text-[var(--ink)] tracking-tight">
           {question}
         </h2>
       )}
 
-      {/* Answer card with textbook serif */}
       <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-6 flex flex-col gap-4 shadow-sm">
         {isNotFound ? (
           <NotFoundNotice onSelectMore={onSelectMoreDocuments} />
@@ -116,7 +114,6 @@ export default function AnswerBlock({
           </div>
         )}
 
-        {/* Footnotes list under answer */}
         {!isNotFound && sources && sources.length > 0 && (
           <FootnoteList
             sources={sources}
@@ -124,7 +121,6 @@ export default function AnswerBlock({
           />
         )}
 
-        {/* Small text actions below answer */}
         {!isStreaming && answer && (
           <AnswerActions
             messageId={messageId}

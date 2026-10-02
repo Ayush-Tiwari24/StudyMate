@@ -23,11 +23,9 @@ export default function App() {
         <NotesProvider>
           <ToastProvider>
             <Routes>
-              {/* Public auth routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
 
-              {/* Protected app routes inside AppShell */}
               <Route
                 path="/"
                 element={
@@ -114,7 +112,6 @@ export default function App() {
                 }
               />
 
-              {/* Fallback */}
               <Route path="*" element={<Navigate to="/chat" replace />} />
             </Routes>
           </ToastProvider>

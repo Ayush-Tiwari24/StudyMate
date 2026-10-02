@@ -26,7 +26,6 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      {/* Toast Container: bottom-left, small, no icons */}
       <div
         className="fixed bottom-4 left-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm"
         aria-live="polite"

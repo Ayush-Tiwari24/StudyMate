@@ -20,7 +20,6 @@ export default function Shelf({
       className={`w-full bg-[var(--surface-muted)] border-r border-[var(--line)] flex flex-col h-full overflow-hidden select-none ${className}`}
       aria-label="The Shelf"
     >
-      {/* Header */}
       <div className="p-3.5 border-b border-[var(--line)] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BookOpen size={16} strokeWidth={2} className="text-[var(--accent)]" />
@@ -34,7 +33,6 @@ export default function Shelf({
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-5">
-        {/* Documents Checklist */}
         <div>
           <div className="flex items-center justify-between mb-2 px-1">
             <span className="font-mono text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider">
@@ -104,7 +102,6 @@ export default function Shelf({
           </div>
         </div>
 
-        {/* Recent Questions list */}
         <div>
           <div className="flex items-center justify-between mb-2 px-1">
             <span className="font-mono text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider">
@@ -141,7 +138,6 @@ export default function Shelf({
         </div>
       </div>
 
-      {/* Shelf Footer: New Question button */}
       <div className="p-3 border-t border-[var(--line)] bg-[var(--surface)]">
         <button
           type="button"

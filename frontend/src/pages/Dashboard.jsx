@@ -31,7 +31,6 @@ export default function Dashboard() {
   return (
     <div className="flex-1 overflow-y-auto bg-[var(--paper)] p-6 md:p-10">
       <div className="max-w-4xl mx-auto flex flex-col gap-8">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
           <div>
             <h1 className="font-serif text-2xl md:text-3xl font-semibold text-[var(--ink)] tracking-tight">
@@ -61,7 +60,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Continue where you left off card */}
         {lastChat ? (
           <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-6 shadow-sm flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -89,7 +87,6 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        {/* Overview Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-4 flex flex-col justify-between gap-1">
             <div>
@@ -136,7 +133,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Shelf Quick Peek */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs uppercase tracking-wider text-[var(--muted)] font-semibold">

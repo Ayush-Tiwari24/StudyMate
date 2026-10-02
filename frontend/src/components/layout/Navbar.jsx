@@ -28,7 +28,6 @@ export default function Navbar() {
 
   return (
     <header className="h-12 bg-[var(--surface)] border-b border-[var(--line)] px-4 flex items-center justify-between select-none z-30 flex-shrink-0">
-      {/* Brand: "a reading desk, not a chatbot" */}
       <div className="flex items-center gap-6">
         <Link to="/chat" className="flex items-center gap-2.5 group">
           <div className="w-6 h-6 rounded-[6px] overflow-hidden flex-shrink-0 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
@@ -42,7 +41,6 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Navigation Links */}
         <nav className="hidden sm:flex items-center gap-1" aria-label="Main Navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -65,9 +63,7 @@ export default function Navbar() {
         </nav>
       </div>
 
-      {/* Right Actions: Theme Toggle + User Info + Logout */}
       <div className="flex items-center gap-3">
-        {/* Night Reading Toggle */}
         <button
           onClick={toggleTheme}
           type="button"

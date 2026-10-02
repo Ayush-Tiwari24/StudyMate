@@ -80,7 +80,6 @@ export default function SourcePanel({
       } ${className}`}
       aria-label="Evidence and source page"
     >
-      {/* Header: Mono file label + page */}
       <div className="p-3 border-b border-[var(--line)] flex items-center justify-between gap-2">
         <span
           className="font-mono text-xs font-medium text-[var(--ink)] truncate"
@@ -112,7 +111,6 @@ export default function SourcePanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        {/* Source citation switcher tabs if multiple citations exist */}
         {sources.length > 1 && (
           <div className="flex items-center gap-1.5 flex-wrap" role="tablist">
             {sources.map((src, idx) => {
@@ -140,7 +138,6 @@ export default function SourcePanel({
           </div>
         )}
 
-        {/* Real PDF Page View with Highlight Overlay */}
         <PdfPageView
           documentId={docId}
           pageNumber={pageNum}
@@ -151,7 +148,6 @@ export default function SourcePanel({
         />
       </div>
 
-      {/* Footer: Open full PDF link */}
       {docId && !isRemoved && (
         <div className="p-3 border-t border-[var(--line)] flex items-center justify-between text-xs">
           <a
