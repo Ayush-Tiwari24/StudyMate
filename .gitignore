@@ -15,6 +15,7 @@ backend/venv/
 .env
 .env.*
 !.env.example
+!frontend/.env.production
 *.env
 backend/.env
 frontend/.env

@@ -53,9 +53,9 @@ services:
       - key: LLM_PROVIDER
         value: groq
       - key: GROQ_MODEL
-        value: openai/gpt-oss-120b
+        value: llama-3.3-70b-versatile
       - key: GROQ_FALLBACK_MODEL
-        value: openai/gpt-oss-20b
+        value: llama-3.1-8b-instant
       - key: GROQ_BASE_URL
         value: https://api.groq.com/openai/v1
 

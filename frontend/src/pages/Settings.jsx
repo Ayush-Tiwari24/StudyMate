@@ -16,7 +16,7 @@ export default function Settings() {
   const [settings, setSettingsState] = useState({
     theme: theme,
     llm_provider: 'groq',
-    model_name: 'openai/gpt-oss-120b',
+    model_name: 'llama-3.3-70b-versatile',
     top_k: 5,
     font_scale: fontScale || 'medium',
   });
@@ -263,7 +263,7 @@ export default function Settings() {
                     onChange={(e) => {
                       const val = e.target.value;
                       let defaultModel = settings.model_name;
-                      if (val === 'groq') defaultModel = 'openai/gpt-oss-120b';
+                      if (val === 'groq') defaultModel = 'llama-3.3-70b-versatile';
                       else if (val === 'openai') defaultModel = 'gpt-4o-mini';
                       else if (val === 'ollama') defaultModel = 'llama3.2:3b';
                       setSettingsState((p) => ({
