@@ -89,8 +89,11 @@ def _get_auth() -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_full_document_deletion_lifecycle():
+def test_full_document_deletion_lifecycle(monkeypatch):
     """Verify complete cleanup across SQL, Chroma vectors, Storage, and citation survival."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "keep_original_pdfs", True)
+
     headers = _get_auth()
     pdf_bytes = _create_sample_pdf("Lecture on Distributed Systems and Paxos Consensus.")
 

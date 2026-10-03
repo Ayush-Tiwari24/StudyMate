@@ -97,12 +97,16 @@ class LocalStorage(BaseStorage):
             return f.read()
 
     def delete(self, key: str) -> None:
+        if not key:
+            return
         path = self._resolve(key)
         if path.exists():
             path.unlink()
             logger.info(f"LocalStorage deleted: {key}")
 
     def exists(self, key: str) -> bool:
+        if not key:
+            return False
         return self._resolve(key).exists()
 
     def delete_user_files(self, user_id: int) -> None:
@@ -154,10 +158,14 @@ class S3Storage(BaseStorage):
         return response["Body"].read()
 
     def delete(self, key: str) -> None:
+        if not key:
+            return
         self.s3.delete_object(Bucket=self.bucket, Key=key)
         logger.info(f"S3Storage deleted: s3://{self.bucket}/{key}")
 
     def exists(self, key: str) -> bool:
+        if not key:
+            return False
         try:
             self.s3.head_object(Bucket=self.bucket, Key=key)
             return True
@@ -190,28 +198,22 @@ class DatabaseStorage(BaseStorage):
 
     def save(self, user_id: int, filename: str, content: bytes) -> str:
         import hashlib
-        clean_name = safe_filename(filename)
-        key = f"{user_id}/{clean_name}"
+        import uuid
+        random_hex = uuid.uuid4().hex
+        key = f"{user_id}/{random_hex}.pdf"
         sha256 = hashlib.sha256(content).hexdigest()
         size = len(content)
 
         with SessionLocal() as db:
-            existing = db.query(StoredFile).filter(StoredFile.key == key).first()
-            if existing:
-                existing.data = content
-                existing.size_bytes = size
-                existing.sha256 = sha256
-                existing.content_type = "application/pdf"
-            else:
-                stored = StoredFile(
-                    key=key,
-                    user_id=user_id,
-                    content_type="application/pdf",
-                    size_bytes=size,
-                    sha256=sha256,
-                    data=content,
-                )
-                db.add(stored)
+            stored = StoredFile(
+                key=key,
+                user_id=user_id,
+                content_type="application/pdf",
+                size_bytes=size,
+                sha256=sha256,
+                data=content,
+            )
+            db.add(stored)
             db.commit()
 
         logger.info(f"DatabaseStorage saved: key={key} size={size} bytes")
@@ -225,6 +227,8 @@ class DatabaseStorage(BaseStorage):
             return bytes(row[0])
 
     def delete(self, key: str) -> None:
+        if not key:
+            return
         with SessionLocal() as db:
             deleted = db.query(StoredFile).filter(StoredFile.key == key).delete()
             db.commit()
@@ -232,6 +236,8 @@ class DatabaseStorage(BaseStorage):
                 logger.info(f"DatabaseStorage deleted: key={key}")
 
     def exists(self, key: str) -> bool:
+        if not key:
+            return False
         with SessionLocal() as db:
             row = db.query(StoredFile.id).filter(StoredFile.key == key).first()
             return row is not None

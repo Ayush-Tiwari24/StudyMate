@@ -63,82 +63,110 @@ async def upload_document(
             detail="Only PDF files are accepted.",
         )
 
-    # Read file content
-    content = await file.read()
-    content_len = len(content)
+    import hashlib
+    import tempfile
 
-    # Validate file size
-    if content_len > settings.max_upload_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds maximum size of {settings.max_upload_mb} MB.",
+    hasher = hashlib.sha256()
+    total_bytes = 0
+    tmp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            while chunk := await file.read(65536):
+                total_bytes += len(chunk)
+                if total_bytes > settings.max_upload_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds maximum size of {settings.max_upload_mb} MB.",
+                    )
+                hasher.update(chunk)
+                tmp_file.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty file uploaded.",
+            )
+
+        # Check global soft cap (refuse new uploads when database exceeds global cap)
+        current_db_size = get_database_size_bytes(db)
+        if current_db_size + total_bytes > settings.global_storage_cap_bytes:
+            logger.warning(
+                f"Global storage cap reached: db_size={current_db_size} cap={settings.global_storage_cap_bytes}"
+            )
+            raise HTTPException(
+                status_code=413,
+                detail="Uploads are paused because storage is full.",
+            )
+
+        # Check per-user storage quota
+        user_used_bytes = (
+            db.query(func.coalesce(func.sum(Document.size_bytes), 0))
+            .filter(Document.user_id == current_user.id)
+            .scalar()
+        )
+        if (user_used_bytes + total_bytes) > settings.user_storage_quota_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail="You've used all your storage. Delete a document to add more.",
+            )
+
+        # Check for duplicates via SHA-256 hash
+        file_hash = hasher.hexdigest()
+        existing = (
+            db.query(Document)
+            .filter(Document.user_id == current_user.id, Document.file_hash == file_hash)
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"This file has already been uploaded as '{existing.filename}'.",
+            )
+
+        storage_key = None
+        if settings.keep_original_pdfs:
+            from app.services.storage import get_storage
+            storage = get_storage()
+            with open(tmp_path, "rb") as f:
+                content = f.read()
+            storage_key = storage.save(current_user.id, file.filename or "document.pdf", content)
+
+        # Create database record
+        document = Document(
+            user_id=current_user.id,
+            filename=file.filename or "document.pdf",
+            file_path=storage_key,
+            file_hash=file_hash,
+            size_bytes=total_bytes,
+            status="uploaded",
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+        logger.info(f"Document uploaded: id={document.id} filename={document.filename} stored={settings.keep_original_pdfs}")
+
+        # Enqueue ingestion pipeline directly from the temp file
+        from app.services.ingestion.pipeline import run_ingestion_pipeline
+        background_tasks.add_task(run_ingestion_pipeline, document.id, str(tmp_path))
+
+        # Handed off to background task which will unlink it
+        tmp_path = None
+
+        return DocumentUploadResponse(
+            document_id=document.id,
+            filename=document.filename,
+            status="uploaded",
         )
 
-    # Check global soft cap (refuse new uploads when database exceeds global cap)
-    current_db_size = get_database_size_bytes(db)
-    if current_db_size + content_len > settings.global_storage_cap_bytes:
-        logger.warning(
-            f"Global storage cap reached: db_size={current_db_size} cap={settings.global_storage_cap_bytes}"
-        )
-        raise HTTPException(
-            status_code=413,
-            detail="Uploads are paused because storage is full.",
-        )
-
-    # Check per-user storage quota
-    user_used_bytes = (
-        db.query(func.coalesce(func.sum(Document.size_bytes), 0))
-        .filter(Document.user_id == current_user.id)
-        .scalar()
-    )
-    if (user_used_bytes + content_len) > settings.user_storage_quota_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail="You've used all your storage. Delete a document to add more.",
-        )
-
-    # Check for duplicates via SHA-256 hash
-    file_hash = compute_sha256(content)
-    existing = (
-        db.query(Document)
-        .filter(Document.user_id == current_user.id, Document.file_hash == file_hash)
-        .first()
-    )
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"This file has already been uploaded as '{existing.filename}'.",
-        )
-
-    # Save file via storage backend (stores relative storage key)
-    from app.services.storage import get_storage
-    storage = get_storage()
-    storage_key = storage.save(current_user.id, file.filename or "document.pdf", content)
-
-    # Create database record
-    document = Document(
-        user_id=current_user.id,
-        filename=file.filename or "document.pdf",
-        file_path=storage_key,
-        file_hash=file_hash,
-        size_bytes=content_len,
-        status="uploaded",
-    )
-    db.add(document)
-    db.commit()
-    db.refresh(document)
-
-    logger.info(f"Document uploaded: id={document.id} filename={document.filename}")
-
-    # Enqueue ingestion pipeline as background task
-    from app.services.ingestion.pipeline import run_ingestion_pipeline
-    background_tasks.add_task(run_ingestion_pipeline, document.id)
-
-    return DocumentUploadResponse(
-        document_id=document.id,
-        filename=document.filename,
-        status="uploaded",
-    )
+    finally:
+        if tmp_path and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception as e:
+                logger.warning(f"Could not remove temp upload file {tmp_path}: {e}")
 
 
 @router.get("/usage", response_model=StorageUsageResponse)
@@ -255,13 +283,14 @@ def delete_document(
     except Exception as e:
         logger.warning(f"Failed to delete vectors for doc {doc_id}: {e}")
 
-    # 3. Delete file from storage (best-effort)
-    try:
-        from app.services.storage import get_storage
-        storage = get_storage()
-        storage.delete(file_path_str)
-    except Exception as e:
-        logger.warning(f"Failed to delete file {file_path_str}: {e}")
+    # 3. Delete file from storage (best-effort, if retained)
+    if file_path_str:
+        try:
+            from app.services.storage import get_storage
+            storage = get_storage()
+            storage.delete(file_path_str)
+        except Exception as e:
+            logger.warning(f"Failed to delete file {file_path_str}: {e}")
 
     return {"message": "Document deleted successfully."}
 
@@ -281,6 +310,14 @@ def retry_document(
     )
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    from app.services.storage import get_storage
+    storage = get_storage()
+    if not doc.file_path or not storage.exists(doc.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please upload this file again.",
+        )
 
     doc.status = "uploaded"
     doc.progress = 0

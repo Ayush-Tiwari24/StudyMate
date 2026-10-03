@@ -28,3 +28,4 @@ aiofiles
 psycopg2-binary
 pgvector
 boto3
+psutil

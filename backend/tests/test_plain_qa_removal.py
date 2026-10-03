@@ -176,3 +176,38 @@ def test_citation_filter_comprehensive_cases():
     assert "[1, 2]" not in result
     assert "[3]" not in result
     assert result == "According to , virtual memory is useful "
+
+
+def test_ephemeral_upload_and_retry_not_retained():
+    """When KEEP_ORIGINAL_PDFS=False, document is uploaded without saving file, and retry returns 400."""
+    from app.core.config import settings
+    from app.services.storage import get_storage
+    headers = _get_auth_headers("ephemeral@test.com", "Ephemeral User")
+    pdf_bytes = _create_sample_pdf("Ephemeral upload content testing.")
+
+    res = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("test.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+    )
+    assert res.status_code in (200, 202)
+    doc_id = res.json()["document_id"]
+
+    db = TestingSession()
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    assert doc is not None
+    assert doc.file_path is None
+    assert doc.status in ("uploaded", "processing", "ready")
+    db.close()
+
+    storage = get_storage()
+    assert storage.exists(doc.file_path) is False
+
+    # Retry should fail with 400 because original file is not retained
+    retry_res = client.post(f"/api/documents/{doc_id}/retry", headers=headers)
+    assert retry_res.status_code == 400
+    assert "Please upload this file again" in retry_res.json()["detail"]
+
+    # Deleting document succeeds without error
+    del_res = client.delete(f"/api/documents/{doc_id}", headers=headers)
+    assert del_res.status_code == 200

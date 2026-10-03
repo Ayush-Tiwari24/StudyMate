@@ -104,7 +104,10 @@ def test_account_deletion_with_wrong_password_rejected():
     assert "incorrect password" in resp.json()["detail"].lower()
 
 
-def test_account_deletion_full_purge():
+def test_account_deletion_full_purge(monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "keep_original_pdfs", True)
+
     headers = _get_auth()
     pdf_bytes = _create_sample_pdf("Lecture on Graph Theory, vertex connectivity, Eulerian circuits, and Hamiltonian paths.")
 

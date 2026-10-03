@@ -208,15 +208,6 @@ def export_user_data(
     for chat in current_user.chats:
         msgs = []
         for m in chat.messages:
-            sources = [
-                {
-                    "document_id": s.document_id,
-                    "page": s.page,
-                    "score": s.score,
-                    "snippet": s.snippet,
-                }
-                for s in m.sources
-            ]
             msgs.append({
                 "id": m.id,
                 "role": m.role,
@@ -224,7 +215,6 @@ def export_user_data(
                 "model_used": m.model_used,
                 "latency_ms": m.latency_ms,
                 "created_at": m.created_at.isoformat() if m.created_at else None,
-                "sources": sources,
             })
         chats_data.append({
             "id": chat.id,

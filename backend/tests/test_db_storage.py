@@ -62,7 +62,7 @@ def test_database_storage_save_open_exists():
     content = b"%PDF-1.4 test document binary content " * 50
 
     key = storage.save(user_id=101, filename="notes.pdf", content=content)
-    assert key.startswith("101/") and key.endswith("notes.pdf")
+    assert key.startswith("101/") and key.endswith(".pdf")
     assert storage.exists(key) is True
     assert storage.exists("101/nonexistent.pdf") is False
 

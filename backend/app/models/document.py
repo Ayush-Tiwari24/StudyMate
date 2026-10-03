@@ -34,7 +34,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
-    file_path = Column(String(500), nullable=False)
+    file_path = Column(String(500), nullable=True)
     file_hash = Column(String(64), nullable=False, index=True)  # SHA-256
     size_bytes = Column(Integer, default=0)
     pages = Column(Integer, default=0)

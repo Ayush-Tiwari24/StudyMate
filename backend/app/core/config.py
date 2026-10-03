@@ -28,9 +28,10 @@ class Settings(BaseSettings):
     db_pool_timeout: int = 10
     db_pool_recycle: int = 240
     db_pool_pre_ping: bool = True
-    neon_keepalive_seconds: int = 180  # Ping Neon every N seconds (0 to disable)
+    neon_keepalive_seconds: int = 0  # Ping Neon every N seconds (0 to disable)
 
     # ── File Storage ─────────────────────────────────────────────
+    keep_original_pdfs: bool = False  # False = ephemeral upload (zero PDF storage on disk/DB)
     storage_backend: str = "local"  # "local" | "s3" | "db"
     upload_dir: str = "./data/raw_pdfs"
     s3_bucket: str = ""
@@ -38,7 +39,7 @@ class Settings(BaseSettings):
     s3_access_key: str = ""
     s3_secret_key: str = ""
     s3_region: str = "us-east-1"
-    max_upload_mb: int = 30
+    max_upload_mb: int = 15
     user_storage_quota_mb: int = 100
     global_storage_cap_mb: int = 400
 

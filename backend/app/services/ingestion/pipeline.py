@@ -18,13 +18,31 @@ from app.services.ingestion.cleaner import clean_pages
 from app.services.ingestion.chunker import chunk_pages
 from app.services.embeddings import embed_documents
 from app.services.vectorstore import add_chunks, delete_vectors_by_document
+import gc
+import psutil
 import threading
+import tempfile
 
 # Limit concurrent ingestion to 1 at a time to prevent RAM spikes on 2GB Render instance
 _INGESTION_SEMAPHORE = threading.Semaphore(1)
+MAX_CONTAINER_RSS_MB = 1600.0  # ~80% of 2 GB Render container
 
 
-def run_ingestion_pipeline(document_id: int) -> None:
+def _check_rss_memory(stage: str) -> bool:
+    """Return False if RSS memory exceeds 80% container cap."""
+    try:
+        rss_mb = psutil.Process().memory_info().rss / (1024 * 1024)
+        if rss_mb > MAX_CONTAINER_RSS_MB:
+            logger.warning(
+                f"Memory threshold exceeded during {stage}: RSS={rss_mb:.1f} MB > {MAX_CONTAINER_RSS_MB} MB"
+            )
+            return False
+    except Exception:
+        pass
+    return True
+
+
+def run_ingestion_pipeline(document_id: int, temp_file_path: str | None = None) -> None:
     """
     Full ingestion pipeline for a single document.
     Designed to run as a FastAPI BackgroundTask.
@@ -33,10 +51,10 @@ def run_ingestion_pipeline(document_id: int) -> None:
     logger.info(f"Ingestion task queued for document {document_id}; waiting for slot...")
     with _INGESTION_SEMAPHORE:
         logger.info(f"Ingestion slot acquired for document {document_id}")
-        _run_ingestion_internal(document_id)
+        _run_ingestion_internal(document_id, temp_file_path)
 
 
-def _run_ingestion_internal(document_id: int) -> None:
+def _run_ingestion_internal(document_id: int, temp_file_path: str | None = None) -> None:
     db = SessionLocal()
 
     try:
@@ -54,18 +72,24 @@ def _run_ingestion_internal(document_id: int) -> None:
 
         logger.info(f"Ingestion started: id={doc.id} filename={doc.filename}")
 
-        # ── Retrieve file from storage to temporary local file ────────
-        import tempfile
-        from app.services.storage import get_storage
-        storage = get_storage()
-        if not storage.exists(doc.file_path):
-            _fail(db, doc, f"File not found in storage: {doc.file_path}")
-            return
+        # ── Retrieve or use temporary local file ──────────────────────
+        tmp_path = None
+        if temp_file_path and Path(temp_file_path).exists():
+            tmp_path = Path(temp_file_path)
+        else:
+            if not doc.file_path:
+                _fail(db, doc, "Original file is not retained. Please upload this file again.")
+                return
+            from app.services.storage import get_storage
+            storage = get_storage()
+            if not storage.exists(doc.file_path):
+                _fail(db, doc, f"File not found in storage: {doc.file_path}")
+                return
 
-        file_bytes = storage.open(doc.file_path)
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
-            tmp_file.write(file_bytes)
-            tmp_path = Path(tmp_file.name)
+            file_bytes = storage.open(doc.file_path)
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+                tmp_file.write(file_bytes)
+                tmp_path = Path(tmp_file.name)
 
         try:
             # ── Step 1: Load PDF ────────────────────────────────────
@@ -84,7 +108,7 @@ def _run_ingestion_internal(document_id: int) -> None:
                 logger.info(f"{len(pages_needing_ocr)}/{len(pages)} pages appear scanned. Running in-process OCR for {doc.filename}")
                 pages = ocr_pdf_pages(tmp_path, pages_to_ocr=pages_needing_ocr)
         finally:
-            if tmp_path.exists():
+            if tmp_path and tmp_path.exists():
                 try:
                     tmp_path.unlink()
                 except Exception as unlink_err:
@@ -109,6 +133,9 @@ def _run_ingestion_internal(document_id: int) -> None:
             user_id=doc.user_id,
         )
 
+        del pages
+        gc.collect()
+
         if not chunks:
             _fail(db, doc, "Text was found but could not be chunked.")
             return
@@ -117,6 +144,10 @@ def _run_ingestion_internal(document_id: int) -> None:
         db.commit()
 
         # ── Step 5: Embed ───────────────────────────────────────
+        if not _check_rss_memory("pre-embedding"):
+            _fail(db, doc, "Ingestion aborted: Memory threshold reached to protect server stability.")
+            return
+
         chunk_texts = [c["content"] for c in chunks]
 
         # Embed in smaller batches (16) to conserve RAM and avoid starving event loop
@@ -130,6 +161,9 @@ def _run_ingestion_internal(document_id: int) -> None:
         batch_size = 16
         all_embeddings = []
         for i in range(0, len(chunk_texts), batch_size):
+            if not _check_rss_memory(f"embedding-batch-{i}"):
+                _fail(db, doc, "Ingestion aborted: Memory threshold reached during embedding.")
+                return
             batch = chunk_texts[i:i + batch_size]
             batch_embeddings = embed_documents(batch)
             all_embeddings.extend(batch_embeddings)
@@ -154,6 +188,9 @@ def _run_ingestion_internal(document_id: int) -> None:
             metadatas=metadatas,
         )
 
+        del all_embeddings
+        gc.collect()
+
         # ── Step 7: Save chunks to SQL DB (idempotent) ──────────
         db.query(Chunk).filter(Chunk.document_id == doc.id).delete()
         for chunk_data, vector_id in zip(chunks, vector_ids):
@@ -166,8 +203,12 @@ def _run_ingestion_internal(document_id: int) -> None:
             )
             db.add(chunk_record)
 
+        del chunks
+        del chunk_texts
+        gc.collect()
+
         # ── Step 8: Update document status ──────────────────────
-        doc.chunk_count = len(chunks)
+        doc.chunk_count = len(vector_ids)
         doc.progress = 100
         doc.status = "ready"
         doc.error_message = None
