@@ -28,7 +28,22 @@ export default function AnswerBlock({
       )}
 
       <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[6px] p-6 flex flex-col gap-4 shadow-sm">
-        {isNotFound ? (
+        {!answer && !isStreaming ? (
+          <div className="flex flex-col gap-2.5 py-1">
+            <p className="text-xs text-[var(--muted)]">Could not retrieve answer. The server may have been waking up or timed out.</p>
+            {onRetry && (
+              <div>
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="px-3 py-1.5 rounded-[4px] bg-[var(--surface-muted)] border border-[var(--line)] text-xs text-[var(--ink)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors inline-flex items-center gap-1.5 font-medium"
+                >
+                  <span>Retry Question ↺</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : isNotFound ? (
           <NotFoundNotice onSelectMore={onSelectMoreDocuments} />
         ) : (
           <div className="prose-answer">

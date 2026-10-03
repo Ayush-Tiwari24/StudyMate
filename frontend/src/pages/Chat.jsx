@@ -141,7 +141,7 @@ export default function Chat() {
     [loadChatsList]
   );
 
-  const { ask, isStreaming, streamedText } = useChatStream({
+  const { ask, isStreaming, streamedText, error: streamError } = useChatStream({
     chatId: currentChat?.id,
     onMessageComplete: handleMessageComplete,
   });
@@ -429,6 +429,19 @@ export default function Chat() {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {streamError && !isStreaming && (
+                <div className="p-3.5 mb-6 rounded-[6px] bg-[var(--surface)] border border-[var(--line)] text-xs text-[var(--status-failed)] flex items-center justify-between gap-3 shadow-xs">
+                  <span>{streamError}</span>
+                  <button
+                    type="button"
+                    onClick={() => lastUserMessage && handleSendQuestion(lastUserMessage.content)}
+                    className="px-3 py-1 rounded bg-[var(--surface-muted)] text-[var(--ink)] border border-[var(--line)] hover:border-[var(--accent)] text-xs font-medium transition-colors"
+                  >
+                    Retry ↺
+                  </button>
                 </div>
               )}
 
