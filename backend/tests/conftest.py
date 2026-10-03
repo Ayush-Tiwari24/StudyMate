@@ -36,6 +36,8 @@ def isolate_test_environment():
     orig_storage_backend = settings.storage_backend
     orig_auto_create_tables = settings.auto_create_tables
 
+    orig_environment = settings.environment
+
     sqlite_url = f"sqlite:///{test_db_path}"
     settings.upload_dir = str(test_raw_pdfs)
     settings.vector_store_dir = str(test_vector_store)
@@ -44,6 +46,7 @@ def isolate_test_environment():
     settings.vector_backend = "chroma"
     settings.storage_backend = "local"
     settings.auto_create_tables = True
+    settings.environment = "test"
 
     get_chroma_client.cache_clear()
 
@@ -57,6 +60,7 @@ def isolate_test_environment():
     settings.vector_backend = orig_vector_backend
     settings.storage_backend = orig_storage_backend
     settings.auto_create_tables = orig_auto_create_tables
+    settings.environment = orig_environment
 
     get_chroma_client.cache_clear()
     shutil.rmtree(temp_dir, ignore_errors=True)

@@ -279,8 +279,12 @@ def health_check():
 
 @app.get("/api/health/ready", tags=["Health"])
 def readiness_check():
-    """Readiness probe. In test/dev it verifies DB access; on production Render it returns immediately to prevent 5s timeout restart loops."""
-    if settings.environment != "production":
+    """Readiness probe. On Render or in production it returns immediately to prevent 5s timeout restart loops."""
+    import os
+    if os.environ.get("RENDER") or settings.environment in ("production", "prod"):
+        return {"status": "ready"}
+
+    if settings.environment == "test":
         from fastapi.responses import JSONResponse
         from app.db.session import engine
         from sqlalchemy import text
