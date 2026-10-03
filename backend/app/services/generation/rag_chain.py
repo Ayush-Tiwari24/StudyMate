@@ -148,9 +148,65 @@ def clean_rewritten_query(raw_text: str) -> str:
         if l and not l.lower().startswith(("here is", "i will", "based on", "the user", "to find", "retrieving")):
             clean_lines.append(l)
 
-    result = clean_lines[-1] if clean_lines else lines[0]
-    result = result.strip().strip('"').strip("'")
-    return result
+    result = clean_lines[-1] if clean_lines else (lines[0] if lines else "")
+    return result.strip().strip('"').strip("'")
+
+
+PRONOUNS_AND_REFERENCES = {
+    "it", "its", "that", "this", "they", "them", "those", "these",
+    "former", "latter", "same", "above", "he", "she", "his", "her",
+    "him", "their", "theirs", "previous", "earlier", "again"
+}
+
+
+def should_rewrite_question(question: str, history: list[dict], is_broad_query: bool, doc_titles: list[str]) -> bool:
+    """
+    Decides whether a question requires rewriting before vector retrieval.
+    Self-contained questions skip rewriting to eliminate an unnecessary 750-1000ms LLM round trip.
+    """
+    if not history or len(history) < 2:
+        return False
+
+    if is_broad_query and doc_titles:
+        return True
+
+    words = re.findall(r"\b[a-zA-Z0-9']+\b", question.lower())
+    if not words:
+        return False
+
+    # Check for pronouns or reference words
+    has_reference = any(w in PRONOUNS_AND_REFERENCES for w in words)
+    has_phrase_ref = any(phrase in question.lower() for phrase in [
+        "the above", "mentioned above", "as said", "tell me more", "explain more", "what else"
+    ])
+
+    # Short follow-ups with references need rewriting
+    if len(words) <= 12 and (has_reference or has_phrase_ref):
+        return True
+
+    # Questions that start with follow-up transition phrases
+    lower_q = question.lower().strip()
+    if lower_q.startswith(("what about", "how about", "and what", "why then", "what if")):
+        return True
+
+    return False
+
+
+async def execute_question_rewrite(
+    rewrite_prompt: str,
+    pref_provider: str | None,
+    pref_model: str | None,
+    timeout: float = 4.0,
+) -> str | None:
+    """Run rewrite with ainvoke and short timeout to prevent event loop stalls."""
+    import asyncio
+    try:
+        rewrite_llm = get_llm_for_rewrite(provider=pref_provider, model_name=pref_model)
+        response = await asyncio.wait_for(rewrite_llm.ainvoke(rewrite_prompt), timeout=timeout)
+        return clean_rewritten_query(response.content)
+    except Exception as e:
+        logger.warning(f"Async question rewrite failed or timed out: {e}")
+        return None
 
 
 async def rag_query(
@@ -161,6 +217,9 @@ async def rag_query(
     top_k: int | None = None,
     db: Session = None,
     user_preferences: dict | None = None,
+    timer=None,
+    prefetched_history: list[dict] | None = None,
+    prefetched_doc_titles: list[str] | None = None,
 ) -> AsyncGenerator[dict, None]:
     """
     Execute the full RAG pipeline and yield SSE events.
@@ -177,28 +236,49 @@ async def rag_query(
 
     effective_top_k = top_k or pref_top_k or settings.top_k
 
+    import asyncio
+
     # ── Step 1: Load chat history ──────────────────────────────
-    history = []
-    if db:
-        recent_msgs = (
-            db.query(Message)
-            .filter(Message.chat_id == chat_id)
-            .order_by(Message.created_at.desc())
-            .limit(settings.history_window * 2)  # user + assistant pairs
-            .all()
-        )
-        recent_msgs.reverse()  # Chronological order
-        history = [{"role": m.role, "content": m.content} for m in recent_msgs]
+    if prefetched_history is not None:
+        history = prefetched_history
+        if timer:
+            timer.timings["history_ms"] = 0.0
+    elif db:
+        def _get_history():
+            msgs = (
+                db.query(Message)
+                .filter(Message.chat_id == chat_id)
+                .order_by(Message.created_at.desc())
+                .limit(settings.history_window * 2)
+                .all()
+            )
+            msgs.reverse()
+            return [{"role": m.role, "content": m.content} for m in msgs]
+
+        if timer:
+            with timer.measure("history"):
+                history = await asyncio.to_thread(_get_history)
+        else:
+            history = await asyncio.to_thread(_get_history)
+    else:
+        history = []
 
     # ── Step 2: Rewrite follow-up questions / Expand broad queries ──
-    doc_titles = []
-    if db and document_ids:
+    if prefetched_doc_titles is not None:
+        doc_titles = prefetched_doc_titles
+    elif db and document_ids:
         try:
-            from app.models.document import Document
-            docs = db.query(Document).filter(Document.id.in_(document_ids)).all()
-            doc_titles = [d.filename.replace('.pdf', '').strip() for d in docs]
+            def _get_doc_titles():
+                from app.models.document import Document
+                docs = db.query(Document).filter(Document.id.in_(document_ids)).all()
+                return [d.filename.replace('.pdf', '').strip() for d in docs]
+
+            doc_titles = await asyncio.to_thread(_get_doc_titles)
         except Exception as e:
             logger.warning(f"Could not load document titles: {e}")
+            doc_titles = []
+    else:
+        doc_titles = []
 
     standalone_question = question
     is_broad_query = any(k in question.lower() for k in [
@@ -207,38 +287,44 @@ async def rag_query(
         "core topics", "key concepts", "primary definitions"
     ])
 
-    if (history and len(history) >= 2) or (is_broad_query and doc_titles):
+    needs_rewrite = should_rewrite_question(question, history, is_broad_query, doc_titles)
+
+    if needs_rewrite:
         rewrite_prompt = build_rewrite_prompt(history, question, doc_titles=doc_titles)
         candidate = None
-        try:
-            rewrite_llm = get_llm_for_rewrite(provider=pref_provider, model_name=pref_model)
-            response = rewrite_llm.invoke(rewrite_prompt)
-            candidate = clean_rewritten_query(response.content)
-        except Exception as e:
-            logger.warning(f"Question rewrite failed on primary model: {e}")
-            active_provider = pref_provider or settings.llm_provider
-            if active_provider == "groq" and (pref_model != settings.groq_fallback_model):
-                try:
-                    logger.info(f"Retrying rewrite with fallback model {settings.groq_fallback_model}")
-                    rewrite_llm = get_llm_for_rewrite(provider="groq", model_name=settings.groq_fallback_model)
-                    response = rewrite_llm.invoke(rewrite_prompt)
-                    candidate = clean_rewritten_query(response.content)
-                except Exception as fb_err:
-                    logger.warning(f"Fallback rewrite also failed: {fb_err}")
+        if timer:
+            with timer.measure("rewrite"):
+                candidate = await execute_question_rewrite(rewrite_prompt, pref_provider, pref_model, timeout=4.0)
+        else:
+            candidate = await execute_question_rewrite(rewrite_prompt, pref_provider, pref_model, timeout=4.0)
 
         if candidate and len(candidate) > 5:
             standalone_question = candidate
             logger.info(f"Optimized retrieval query: {standalone_question}")
         else:
             standalone_question = question
+    else:
+        if timer:
+            timer.timings["rewrite_ms"] = 0.0
 
-    # ── Step 3: Retrieve relevant chunks ───────────────────────
-    chunks = retrieve_chunks(
-        question=standalone_question,
-        user_id=user_id,
-        document_ids=document_ids,
-        top_k=settings.fetch_k,  # Fetch more for reranking
-    )
+    # ── Step 3: Retrieve relevant chunks (non-blocking) ────────
+    if timer:
+        with timer.measure("search"):
+            chunks = await asyncio.to_thread(
+                retrieve_chunks,
+                question=standalone_question,
+                user_id=user_id,
+                document_ids=document_ids,
+                top_k=settings.fetch_k,
+            )
+    else:
+        chunks = await asyncio.to_thread(
+            retrieve_chunks,
+            question=standalone_question,
+            user_id=user_id,
+            document_ids=document_ids,
+            top_k=settings.fetch_k,
+        )
 
     # ── Step 4: Handle "not found" case ────────────────────────
     if not chunks:
@@ -255,14 +341,24 @@ async def rag_query(
     if non_promo:
         chunks = non_promo
 
-    # ── Step 5: Rerank (optional) ──────────────────────────────
+    # ── Step 5: Rerank (optional, non-blocking) ────────────────
     if settings.rerank_enabled:
-        chunks = rerank_chunks(standalone_question, chunks, top_n=effective_top_k)
+        if timer:
+            with timer.measure("rerank"):
+                chunks = await asyncio.to_thread(rerank_chunks, standalone_question, chunks, top_n=effective_top_k)
+        else:
+            chunks = await asyncio.to_thread(rerank_chunks, standalone_question, chunks, top_n=effective_top_k)
     else:
         chunks = chunks[:effective_top_k]
+        if timer:
+            timer.timings["rerank_ms"] = 0.0
 
     # ── Step 6: Build prompt ───────────────────────────────────
-    prompt = build_answer_prompt(chunks, standalone_question)
+    if timer:
+        with timer.measure("prompt"):
+            prompt = build_answer_prompt(chunks, standalone_question)
+    else:
+        prompt = build_answer_prompt(chunks, standalone_question)
 
     # ── Step 7: Stream LLM response ───────────────────────────
     llm = get_llm(
@@ -279,10 +375,18 @@ async def rag_query(
         async for chunk in llm.astream(prompt):
             token_text = reasoning_filter.process_chunk(chunk)
             if token_text:
+                if timer:
+                    timer.record_first_token()
+                    timer.record_token()
                 full_answer_parts.append(token_text)
                 yield {"type": "token", "text": token_text}
         tail = reasoning_filter.flush()
         if tail:
+            if timer:
+                timer.record_first_token()
+                timer.record_token()
+            full_answer_parts.append(tail)
+            yield {"type": "token", "text": tail}
             full_answer_parts.append(tail)
             yield {"type": "token", "text": tail}
     except Exception as e:

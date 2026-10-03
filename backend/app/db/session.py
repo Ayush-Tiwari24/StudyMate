@@ -89,11 +89,12 @@ if db_url.startswith("sqlite"):
 else:
     # PostgreSQL / Neon pooler settings
     # Neon pooler uses PgBouncer in transaction mode.
-    # Keep pool modest (3 + 2) and recycle before scale-to-zero (240s)
+    # Keep pool modest (5 + 5), pool_timeout=10s, and recycle before scale-to-zero (240s)
     engine_kwargs["connect_args"] = {"connect_timeout": 15}
     engine_kwargs["pool_pre_ping"] = settings.db_pool_pre_ping
     engine_kwargs["pool_size"] = settings.db_pool_size
     engine_kwargs["max_overflow"] = settings.db_max_overflow
+    engine_kwargs["pool_timeout"] = settings.db_pool_timeout
     engine_kwargs["pool_recycle"] = settings.db_pool_recycle
 
 engine = create_engine(
@@ -123,7 +124,8 @@ def log_database_startup_info() -> None:
     logger.info(
         f"Database config: host={hostname} (pooled={is_pooled}), "
         f"dialect={engine.dialect.name}, vector_backend={settings.vector_backend}, "
-        f"storage_backend={settings.storage_backend}"
+        f"storage_backend={settings.storage_backend}, "
+        f"pool_size={settings.db_pool_size}+{settings.db_max_overflow} (timeout={settings.db_pool_timeout}s)"
     )
 
 
@@ -150,14 +152,11 @@ def execute_with_retry(fn, max_retries: int = 3, delays: tuple = (0.5, 1.0, 2.0)
 def get_db():
     """
     FastAPI dependency that yields a database session.
-    Automatically retries initial connection if database is waking up from scale-to-zero.
+    Relies on pool_pre_ping=True for connection verification without an extra SELECT 1 round trip.
     Automatically rolls back on exceptions and closes the session.
     """
     def _create_session():
-        session = SessionLocal()
-        if not db_url.startswith("sqlite"):
-            session.execute(text("SELECT 1;"))
-        return session
+        return SessionLocal()
 
     try:
         db = execute_with_retry(_create_session)

@@ -39,14 +39,19 @@ def get_llm(
         model = model_name or settings.groq_model
         api_key = settings.groq_api_key or settings.openai_api_key
         logger.info(f"Using Groq LLM: {model} (temp={temp})")
-        return ChatOpenAI(
-            model=model,
-            base_url=settings.groq_base_url,
-            api_key=api_key or "dummy_groq_key",
-            temperature=temp,
-            max_tokens=settings.llm_max_tokens,
-            streaming=streaming,
-        )
+        kwargs = {
+            "model": model,
+            "base_url": settings.groq_base_url,
+            "api_key": api_key or "dummy_groq_key",
+            "temperature": temp,
+            "max_tokens": settings.llm_max_tokens,
+            "streaming": streaming,
+            "request_timeout": settings.llm_request_timeout,
+            "max_retries": settings.llm_max_retries,
+        }
+        if settings.groq_reasoning_effort and settings.groq_reasoning_effort != "none":
+            kwargs["reasoning_effort"] = settings.groq_reasoning_effort
+        return ChatOpenAI(**kwargs)
 
     elif provider == "openai":
         from langchain_openai import ChatOpenAI
@@ -59,6 +64,8 @@ def get_llm(
             temperature=temp,
             max_tokens=settings.llm_max_tokens,
             streaming=streaming,
+            request_timeout=settings.llm_request_timeout,
+            max_retries=settings.llm_max_retries,
         )
 
     elif provider == "ollama":
@@ -91,17 +98,21 @@ def get_llm_for_rewrite(
     if provider == "groq":
         from langchain_openai import ChatOpenAI
 
-        # Use fast 20B model for snappy query rewriting
-        model = settings.groq_model or "openai/gpt-oss-20b"
+        model = model_name or settings.groq_model or "openai/gpt-oss-20b"
         api_key = settings.groq_api_key or settings.openai_api_key
-        return ChatOpenAI(
-            model=model,
-            base_url=settings.groq_base_url,
-            api_key=api_key or "dummy_groq_key",
-            temperature=0.0,
-            max_tokens=100,
-            streaming=False,
-        )
+        kwargs = {
+            "model": model,
+            "base_url": settings.groq_base_url,
+            "api_key": api_key or "dummy_groq_key",
+            "temperature": 0.0,
+            "max_tokens": settings.rewrite_max_tokens,
+            "streaming": False,
+            "request_timeout": min(settings.llm_request_timeout, 10.0),
+            "max_retries": 1,
+        }
+        if settings.groq_reasoning_effort and settings.groq_reasoning_effort != "none":
+            kwargs["reasoning_effort"] = settings.groq_reasoning_effort
+        return ChatOpenAI(**kwargs)
 
     elif provider == "openai":
         from langchain_openai import ChatOpenAI
@@ -111,8 +122,10 @@ def get_llm_for_rewrite(
             model=model,
             api_key=settings.openai_api_key,
             temperature=0.0,  # Deterministic rewriting
-            max_tokens=200,
+            max_tokens=settings.rewrite_max_tokens,
             streaming=False,
+            request_timeout=min(settings.llm_request_timeout, 10.0),
+            max_retries=1,
         )
 
     elif provider == "ollama":

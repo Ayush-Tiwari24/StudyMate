@@ -23,10 +23,12 @@ class Settings(BaseSettings):
     migration_database_url: str = ""  # Direct connection URL for Alembic when using Supabase pooler
     auto_create_tables: bool = True
     run_migrations_on_start: bool = True
-    db_pool_size: int = 3
-    db_max_overflow: int = 2
+    db_pool_size: int = 5
+    db_max_overflow: int = 5
+    db_pool_timeout: int = 10
     db_pool_recycle: int = 240
     db_pool_pre_ping: bool = True
+    neon_keepalive_seconds: int = 180  # Ping Neon every N seconds (0 to disable)
 
     # ── File Storage ─────────────────────────────────────────────
     storage_backend: str = "local"  # "local" | "s3" | "db"
@@ -87,8 +89,12 @@ class Settings(BaseSettings):
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     # ── LLM Generation ───────────────────────────────────────────
+    groq_reasoning_effort: str = "low"  # "low" | "medium" | "high" | "none"
     llm_temperature: float = 0.1
-    llm_max_tokens: int = 800
+    llm_max_tokens: int = 1500
+    rewrite_max_tokens: int = 200
+    llm_request_timeout: float = 30.0
+    llm_max_retries: int = 1
 
     # ── Chat History ─────────────────────────────────────────────
     history_window: int = 4

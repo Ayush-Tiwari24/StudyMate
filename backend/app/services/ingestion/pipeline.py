@@ -119,8 +119,15 @@ def _run_ingestion_internal(document_id: int) -> None:
         # ── Step 5: Embed ───────────────────────────────────────
         chunk_texts = [c["content"] for c in chunks]
 
-        # Embed in batches to manage memory
-        batch_size = 32
+        # Embed in smaller batches (16) to conserve RAM and avoid starving event loop
+        import torch
+        if hasattr(torch, "set_num_threads"):
+            try:
+                torch.set_num_threads(settings.torch_num_threads)
+            except Exception:
+                pass
+
+        batch_size = 16
         all_embeddings = []
         for i in range(0, len(chunk_texts), batch_size):
             batch = chunk_texts[i:i + batch_size]

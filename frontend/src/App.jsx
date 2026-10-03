@@ -7,14 +7,25 @@ import { ToastProvider } from './context/ToastContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AppShell from './components/layout/AppShell';
 
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import Library from './pages/Library';
-import Chat from './pages/Chat';
-import Notes from './pages/Notes';
-import History from './pages/History';
-import Settings from './pages/Settings';
+const Login = React.lazy(() => import('./pages/Login'));
+const Register = React.lazy(() => import('./pages/Register'));
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Library = React.lazy(() => import('./pages/Library'));
+const Chat = React.lazy(() => import('./pages/Chat'));
+const Notes = React.lazy(() => import('./pages/Notes'));
+const History = React.lazy(() => import('./pages/History'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+
+function PageLoader() {
+  return (
+    <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-slate-900 transition-colors">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Loading StudyMate...</span>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -22,9 +33,10 @@ export default function App() {
       <AuthProvider>
         <NotesProvider>
           <ToastProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+            <React.Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
 
               <Route
                 path="/"
@@ -114,7 +126,8 @@ export default function App() {
 
               <Route path="*" element={<Navigate to="/chat" replace />} />
             </Routes>
-          </ToastProvider>
+          </React.Suspense>
+        </ToastProvider>
         </NotesProvider>
       </AuthProvider>
     </ThemeProvider>

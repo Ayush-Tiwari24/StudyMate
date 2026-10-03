@@ -113,6 +113,7 @@ def _delete_vectors_by_user_chroma(user_id: int) -> None:
 
 # ── PostgreSQL + pgvector Backend ─────────────────────────────────
 
+@lru_cache(maxsize=1)
 def _check_pgvector_dialect():
     """Ensure pgvector is running against a PostgreSQL database."""
     from app.db.session import engine
@@ -261,7 +262,7 @@ def _search_pgvector(
     where_sql, params = _build_where_clause(where)
     params["q"] = str(query_embedding)
     params["n"] = n_results
-    ef_search = settings.hnsw_ef_search or 40
+    ef_search = int(settings.hnsw_ef_search or 40)
 
     query_sql = text(f"""
         SELECT id, content, user_id, document_id, filename, page, chunk_index,
@@ -272,11 +273,13 @@ def _search_pgvector(
         LIMIT :n
     """)
 
-    with engine.begin() as conn:
-        try:
-            conn.execute(text(f"SET LOCAL hnsw.ef_search = {int(ef_search)}"))
-        except Exception:
-            pass  # If HNSW parameter is not supported by standard indexes, continue
+    # Read-only query: use direct connection without unnecessary transaction overhead
+    with engine.connect() as conn:
+        if ef_search != 40:
+            try:
+                conn.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
+            except Exception:
+                pass  # If HNSW parameter is not supported by standard indexes, continue
         rows = conn.execute(query_sql, params).fetchall()
 
     ids = [row.id for row in rows]

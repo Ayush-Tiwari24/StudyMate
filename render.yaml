@@ -34,6 +34,14 @@ services:
         value: "true"
       - key: AUTO_CREATE_TABLES
         value: "false"
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "5"
+      - key: DB_POOL_TIMEOUT
+        value: "10"
+      - key: NEON_KEEPALIVE_SECONDS
+        value: "180"
 
       # Unified data store: Neon Postgres for relational data, pgvector for vectors, db for PDF files
       - key: VECTOR_BACKEND
@@ -56,6 +64,12 @@ services:
         value: openai/gpt-oss-20b
       - key: GROQ_FALLBACK_MODEL
         value: openai/gpt-oss-120b
+      - key: GROQ_REASONING_EFFORT
+        value: low
+      - key: LLM_MAX_TOKENS
+        value: "1500"
+      - key: REWRITE_MAX_TOKENS
+        value: "200"
       - key: GROQ_BASE_URL
         value: https://api.groq.com/openai/v1
 

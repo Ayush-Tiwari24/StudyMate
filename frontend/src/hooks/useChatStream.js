@@ -39,6 +39,8 @@ export function useChatStream({ chatId, onMessageComplete }) {
 
       let accumulatedText = '';
       let receivedSources = [];
+      const sendTime = performance.now();
+      let firstTokenLogged = false;
 
       try {
         await streamQuestion({
@@ -47,6 +49,13 @@ export function useChatStream({ chatId, onMessageComplete }) {
           documentIds,
           signal: abortControllerRef.current.signal,
           onToken: (token) => {
+            if (!firstTokenLogged && token) {
+              firstTokenLogged = true;
+              const ttft = (performance.now() - sendTime).toFixed(1);
+              if (import.meta.env.DEV) {
+                console.info(`[Perf] TTFT (Send -> First Token): ${ttft} ms`);
+              }
+            }
             accumulatedText += token;
             setStreamedText((prev) => prev + token);
           },

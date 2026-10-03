@@ -119,13 +119,13 @@ async def lifespan(app: FastAPI):
 
     # Start background keep-alive task for Neon serverless postgres to eliminate cold starts
     keepalive_task = None
-    if not settings.database_url.startswith("sqlite"):
+    if not settings.database_url.startswith("sqlite") and settings.neon_keepalive_seconds > 0:
         async def keep_neon_alive():
             from sqlalchemy import text
             from app.db.session import engine
             while True:
                 try:
-                    await asyncio.sleep(180)  # Ping every 3 mins to keep Neon compute & pool warm
+                    await asyncio.sleep(settings.neon_keepalive_seconds)  # Keep Neon compute & pool warm
                     with engine.connect() as conn:
                         conn.execute(text("SELECT 1;"))
                 except asyncio.CancelledError:
@@ -134,7 +134,7 @@ async def lifespan(app: FastAPI):
                     pass
 
         keepalive_task = asyncio.create_task(keep_neon_alive())
-        logger.info("Neon database keep-alive background task started.")
+        logger.info(f"Neon database keep-alive background task started ({settings.neon_keepalive_seconds}s interval).")
 
     yield
 
@@ -183,6 +183,26 @@ limiter = Limiter(key_func=get_rate_limit_key, default_limits=[settings.rate_lim
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
+import time
+
+# ── Request Duration Middleware ─────────────────────────────────
+@app.middleware("http")
+async def log_request_duration(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+    path = request.url.path
+    method = request.method
+    status_code = response.status_code
+
+    if duration_ms > 1000:
+        logger.warning(f"slow_request method={method} path={path} status={status_code} duration_ms={duration_ms}")
+    else:
+        logger.info(f"request method={method} path={path} status={status_code} duration_ms={duration_ms}")
+
+    response.headers["X-Response-Time-Ms"] = str(duration_ms)
+    return response
+
 # ── CORS ─────────────────────────────────────────────────────────
 configured_origins = [o.strip() for o in settings.frontend_origin.split(",") if o.strip()]
 origins = list(set(configured_origins + [
@@ -192,6 +212,21 @@ origins = list(set(configured_origins + [
     "http://127.0.0.1:3000",
 ]))
 
+from starlette.middleware.gzip import GZipMiddleware
+
+
+class UnbufferedGZipMiddleware(GZipMiddleware):
+    async def __call__(self, scope, receive, send):
+        # Exclude SSE streaming endpoints and binary file downloads from gzip compression
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path.endswith("/ask") or path.endswith("/file"):
+                await self.app(scope, receive, send)
+                return
+        await super().__call__(scope, receive, send)
+
+
+app.add_middleware(UnbufferedGZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -199,6 +234,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=86400,
 )
 
 # ── Register Routers ─────────────────────────────────────────────
@@ -243,5 +279,18 @@ def health_check():
 
 @app.get("/api/health/ready", tags=["Health"])
 def readiness_check():
-    """Instant readiness probe so Render health check never times out (>5s) and restarts the instance."""
+    """Readiness probe. In test/dev it verifies DB access; on production Render it returns immediately to prevent 5s timeout restart loops."""
+    if settings.environment != "production":
+        from fastapi.responses import JSONResponse
+        from app.db.session import engine
+        from sqlalchemy import text
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1;"))
+        except Exception as e:
+            logger.warning(f"Readiness check failed / database unavailable: {e}")
+            return JSONResponse(
+                status_code=503,
+                content={"status": "waking", "detail": "Database unavailable"},
+            )
     return {"status": "ready"}
