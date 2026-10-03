@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # ── CORS ─────────────────────────────────────────────────────
     frontend_origin: str = "http://localhost:5173"
-    frontend_origin_regex: str = ""  # Optional regex, e.g. ^https://studymate-.*\.vercel\.app$
+    frontend_origin_regex: str = r"^https:\/\/.*\.vercel\.app$"  # Allows all vercel.app domains by default
 
     # ── LLM Provider ────────────────────────────────────────────
     llm_provider: str = "groq"  # "groq" | "openai" | "ollama"

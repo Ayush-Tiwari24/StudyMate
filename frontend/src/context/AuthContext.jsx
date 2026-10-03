@@ -31,6 +31,25 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     fetchCurrentUser();
+
+    // Safety timeout: ensure loading state never hangs indefinitely (max 6 seconds)
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
+
+    const handleAuthInvalid = () => {
+      clearTokens();
+      setUser(null);
+      setTokenState(null);
+      setLoading(false);
+    };
+
+    window.addEventListener('auth-invalid', handleAuthInvalid);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('auth-invalid', handleAuthInvalid);
+    };
   }, [fetchCurrentUser]);
 
   const login = async (email, password, rememberMe = true) => {

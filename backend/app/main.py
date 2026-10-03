@@ -210,6 +210,7 @@ origins = list(set(configured_origins + [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://study-mate-nu-ashy.vercel.app",
 ]))
 
 from starlette.middleware.gzip import GZipMiddleware
@@ -230,7 +231,7 @@ app.add_middleware(UnbufferedGZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=settings.frontend_origin_regex if settings.frontend_origin_regex else None,
+    allow_origin_regex=settings.frontend_origin_regex if settings.frontend_origin_regex else r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -269,7 +270,11 @@ def health_check():
 
 @app.get("/api/health/ready", tags=["Health"])
 def readiness_check():
-    """Database readiness probe. Checks actual database connectivity."""
+    """Readiness probe. On Render or in production it returns immediately to prevent 5s timeout restart loops."""
+    import os
+    if os.environ.get("RENDER") or settings.environment in ("production", "prod"):
+        return {"status": "ready"}
+
     from fastapi.responses import JSONResponse
     from app.db.session import engine
     from sqlalchemy import text

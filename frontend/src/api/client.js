@@ -56,6 +56,7 @@ export async function refreshAuthToken() {
 
 const client = axios.create({
   baseURL: apiBaseUrl,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -94,9 +95,7 @@ client.interceptors.response.use(
         return client(originalRequest);
       } catch (refreshErr) {
         clearTokens();
-        if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
-          window.location.href = '/login';
-        }
+        window.dispatchEvent(new CustomEvent('auth-invalid'));
         return Promise.reject(refreshErr);
       }
     }
@@ -117,9 +116,7 @@ client.interceptors.response.use(
 
     if (status === 401 && !originalRequest?._retry) {
       clearTokens();
-      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
-        window.location.href = '/login';
-      }
+      window.dispatchEvent(new CustomEvent('auth-invalid'));
     } else if (status === 429) {
       normalizedMessage = "You're asking quickly. Try again in a moment.";
       errorCode = 'RATE_LIMIT';

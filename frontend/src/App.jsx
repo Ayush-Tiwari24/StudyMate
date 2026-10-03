@@ -7,14 +7,66 @@ import { ToastProvider } from './context/ToastContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AppShell from './components/layout/AppShell';
 
-const Login = React.lazy(() => import('./pages/Login'));
-const Register = React.lazy(() => import('./pages/Register'));
-const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const Library = React.lazy(() => import('./pages/Library'));
-const Chat = React.lazy(() => import('./pages/Chat'));
-const Notes = React.lazy(() => import('./pages/Notes'));
-const History = React.lazy(() => import('./pages/History'));
-const Settings = React.lazy(() => import('./pages/Settings'));
+function lazyWithRetry(importFn) {
+  return React.lazy(async () => {
+    try {
+      return await importFn();
+    } catch (err) {
+      const reloadKey = 'studymate_chunk_reload';
+      if (!sessionStorage.getItem(reloadKey)) {
+        sessionStorage.setItem(reloadKey, '1');
+        window.location.reload();
+        return;
+      }
+      throw err;
+    }
+  });
+}
+
+const Login = lazyWithRetry(() => import('./pages/Login'));
+const Register = lazyWithRetry(() => import('./pages/Register'));
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const Library = lazyWithRetry(() => import('./pages/Library'));
+const Chat = lazyWithRetry(() => import('./pages/Chat'));
+const Notes = lazyWithRetry(() => import('./pages/Notes'));
+const History = lazyWithRetry(() => import('./pages/History'));
+const Settings = lazyWithRetry(() => import('./pages/Settings'));
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error('StudyMate ErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[var(--paper)] p-4 select-none">
+          <div className="w-full max-w-sm bg-[var(--surface)] border border-[var(--line)] rounded-[6px] shadow-sm p-6 flex flex-col items-center gap-4 text-center">
+            <h2 className="font-serif text-xl font-medium text-[var(--ink)]">Something went wrong</h2>
+            <p className="text-xs text-[var(--muted)]">StudyMate encountered an error while loading. Please refresh to try again.</p>
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.clear();
+                window.location.href = '/login';
+              }}
+              className="px-4 py-2 bg-[var(--accent)] text-white text-xs font-medium rounded-[6px] hover:bg-[var(--accent-hover)] transition-colors"
+            >
+              Refresh &amp; Return to Login
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function PageLoader() {
   return (
@@ -29,11 +81,12 @@ function PageLoader() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <NotesProvider>
-          <ToastProvider>
-            <React.Suspense fallback={<PageLoader />}>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <NotesProvider>
+            <ToastProvider>
+              <React.Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -131,5 +184,6 @@ export default function App() {
         </NotesProvider>
       </AuthProvider>
     </ThemeProvider>
+  </ErrorBoundary>
   );
 }
