@@ -108,8 +108,3 @@ export async function mockRetryDocument(id) {
   }
   return { data: { document_id: id, status: 'processing' } };
 }
-
-export function mockGetDocumentFileUrl(id) {
-  // Returns bundled sample PDF in public/
-  return '/sample.pdf';
-}

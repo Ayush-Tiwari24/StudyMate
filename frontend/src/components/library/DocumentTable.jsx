@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Trash2, ExternalLink, RotateCw, MessageSquare } from 'lucide-react';
-import { getDocumentFileUrl } from '../../api/documents';
+import { BookOpen, Trash2, MessageSquare } from 'lucide-react';
 import StatusDot from './StatusDot';
 
 export default function DocumentTable({
@@ -9,10 +8,8 @@ export default function DocumentTable({
   loading = false,
   onDelete,
   onRefresh,
-  onRetry,
 }) {
   const [deletingId, setDeletingId] = useState(null);
-  const [retryingId, setRetryingId] = useState(null);
   const navigate = useNavigate();
 
   const handleDelete = async (id, name) => {
@@ -23,15 +20,6 @@ export default function DocumentTable({
       } finally {
         setDeletingId(null);
       }
-    }
-  };
-
-  const handleRetry = async (id) => {
-    setRetryingId(id);
-    try {
-      await onRetry(id);
-    } finally {
-      setRetryingId(null);
     }
   };
 
@@ -109,19 +97,13 @@ export default function DocumentTable({
                           }
                         />
 
-                        {isFailed && onRetry && (
-                          <button
-                            type="button"
-                            onClick={() => handleRetry(doc.id)}
-                            disabled={retryingId === doc.id}
-                            className="text-[var(--accent)] hover:underline inline-flex items-center gap-1 font-mono text-[11px]"
+                        {isFailed && (
+                          <span
+                            className="text-[var(--status-failed)] text-[11px] font-sans"
+                            title={doc.error_message || 'Please upload this file again'}
                           >
-                            <RotateCw
-                              size={11}
-                              className={retryingId === doc.id ? 'animate-spin' : ''}
-                            />
-                            Retry
-                          </button>
+                            Upload again
+                          </span>
                         )}
                       </div>
                     </td>
@@ -139,16 +121,6 @@ export default function DocumentTable({
                             <span>Ask notes</span>
                           </button>
                         )}
-
-                        <a
-                          href={getDocumentFileUrl(doc.id)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1 rounded text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
-                          title="Open original PDF in new tab"
-                        >
-                          <ExternalLink size={13} />
-                        </a>
 
                         <button
                           type="button"

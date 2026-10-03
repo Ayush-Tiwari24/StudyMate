@@ -18,9 +18,6 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
     { key: '/', description: 'Focus the question input bar' },
     { key: 'Enter', description: 'Submit current question to reading desk' },
     { key: 'Shift + Enter', description: 'Insert a new line in question input' },
-    { key: '1 – 9', description: 'Jump directly to source citation 1 through 9' },
-    { key: 'Esc', description: 'Close evidence source panel or this dialog' },
-    { key: '?', description: 'Open this keyboard shortcuts cheatsheet' },
   ];
 
   return (

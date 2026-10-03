@@ -1,8 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import FootnoteMarker from './FootnoteMarker';
-import FootnoteList from './FootnoteList';
 import NotFoundNotice from './NotFoundNotice';
 import AnswerActions from './AnswerActions';
 
@@ -10,8 +8,6 @@ export default function AnswerBlock({
   messageId,
   question = '',
   answer = '',
-  sources = [],
-  onSelectCitation,
   onRetry,
   isStreaming = false,
   onSelectMoreDocuments,
@@ -22,20 +18,6 @@ export default function AnswerBlock({
     (answer.toLowerCase().includes("couldn't find this in the provided documents") ||
       answer.toLowerCase().includes('nothing in your notes covers this') ||
       answer.toLowerCase().includes('nothing in your selected notes covers this'));
-
-  // Normalize citations: [1], [^1], [1, 2], [1,2,3] -> [1](#cite-1), [2](#cite-2)
-  const processAnswerText = (text) => {
-    if (!text) return '';
-    let formatted = text.replace(/\[\^(\d+)\]/g, '[$1]');
-    formatted = formatted.replace(/\[([\d,\s]+)\]/g, (match, inner) => {
-      const numbers = inner.split(',').map((n) => n.trim()).filter((n) => /^\d+$/.test(n));
-      if (numbers.length === 0) return match;
-      return numbers.map((n) => `[${n}](#cite-${n})`).join(', ');
-    });
-    return formatted;
-  };
-
-  const processedAnswer = processAnswerText(answer);
 
   return (
     <article className="flex flex-col gap-2.5 pb-8 border-b border-[var(--line-subtle)] last:border-b-0">
@@ -83,42 +65,21 @@ export default function AnswerBlock({
 
                   return <td {...props}>{formatted}</td>;
                 },
-                a: ({ href, children }) => {
-                  if (href && href.startsWith('#cite-')) {
-                    const index = parseInt(href.replace('#cite-', ''), 10);
-                    const source = sources && sources[index - 1];
-                    return (
-                      <FootnoteMarker
-                        key={href}
-                        index={index}
-                        source={source}
-                        onClick={() => onSelectCitation && onSelectCitation(source, index)}
-                      />
-                    );
-                  }
-                  return (
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[var(--accent)] underline"
-                    >
-                      {children}
-                    </a>
-                  );
-                },
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--accent)] underline"
+                  >
+                    {children}
+                  </a>
+                ),
               }}
             >
-              {processedAnswer}
+              {answer}
             </ReactMarkdown>
           </div>
-        )}
-
-        {!isNotFound && sources && sources.length > 0 && (
-          <FootnoteList
-            sources={sources}
-            onSelectCitation={(src, idx) => onSelectCitation && onSelectCitation(src, idx, sources)}
-          />
         )}
 
         {!isStreaming && answer && (
@@ -126,7 +87,6 @@ export default function AnswerBlock({
             messageId={messageId}
             question={question}
             answer={answer}
-            sources={sources}
             onRetry={onRetry}
           />
         )}

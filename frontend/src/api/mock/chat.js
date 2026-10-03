@@ -17,29 +17,7 @@ let mockChatsStore = [
         id: 2,
         role: 'assistant',
         content:
-          'Normalization organizes database tables to reduce data redundancy and improve data integrity [1]. The primary goal is to isolate data so that additions, deletions, and modifications of an attribute can be made in just one table and then propagated throughout the rest of the database via defined relationships [2].',
-        sources: [
-          {
-            id: 1,
-            file: 'DBMS_Unit3_Normalization.pdf',
-            document_id: 1,
-            page: 14,
-            score: 0.89,
-            snippet:
-              'Normalization is the formal process of systematically decomposing relation schemas to minimize redundancy and avoid insertion, deletion, and update anomalies.',
-            bboxes: [{ x0: 0.1, y0: 0.2, x1: 0.9, y1: 0.35 }],
-          },
-          {
-            id: 2,
-            file: 'DBMS_Unit3_Normalization.pdf',
-            document_id: 1,
-            page: 15,
-            score: 0.84,
-            snippet:
-              'First Normal Form (1NF) establishes the rule that the domain of each attribute must contain only atomic (indivisible) values, and the value of each attribute must be a single value from that domain.',
-            bboxes: [{ x0: 0.1, y0: 0.4, x1: 0.85, y1: 0.55 }],
-          },
-        ],
+          'Normalization organizes database tables to reduce data redundancy and improve data integrity. The primary goal is to isolate data so that additions, deletions, and modifications of an attribute can be made in just one table and then propagated throughout the rest of the database via defined relationships.',
         created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
       },
     ],
@@ -92,7 +70,7 @@ export async function mockUpdateChat(id, updates) {
 /**
  * Mock SSE streaming fetch for /api/chats/{id}/ask
  */
-export async function mockStreamAsk({ question, document_ids, onToken, onSources, onDone, onError }) {
+export async function mockStreamAsk({ question, document_ids, onToken, onDone, onError }) {
   const isUnknown = (question || '').toLowerCase().includes('unknown');
 
   // Realistic timing
@@ -105,14 +83,13 @@ export async function mockStreamAsk({ question, document_ids, onToken, onSources
       onToken(char);
       await new Promise((r) => setTimeout(r, 18));
     }
-    onSources([]);
     onDone({ message_id: Date.now(), latency_ms: 1200 });
     return;
   }
 
   // Answer tokens
   const sampleAnswer =
-    'Based on your selected notes, this concept is explained in detail with reference to structural complexity and operational efficiency [1]. Specifically, dividing the workload into independent subproblems allows systematic execution with logarithmic asymptotic upper bounds [2].';
+    'Based on your selected notes, this concept is explained in detail with reference to structural complexity and operational efficiency. Specifically, dividing the workload into independent subproblems allows systematic execution with logarithmic asymptotic upper bounds.';
 
   const words = sampleAnswer.split(' ');
   for (const word of words) {
@@ -120,30 +97,5 @@ export async function mockStreamAsk({ question, document_ids, onToken, onSources
     await new Promise((r) => setTimeout(r, 35));
   }
 
-  // Sources event
-  const sampleSources = [
-    {
-      id: 1,
-      file: 'DBMS_Unit3_Normalization.pdf',
-      document_id: 1,
-      page: 14,
-      score: 0.88,
-      snippet:
-        'The structural complexity of relation schemas can be characterized by functional dependencies and multi-valued dependencies.',
-      bboxes: [{ x0: 0.1, y0: 0.2, x1: 0.9, y1: 0.35 }],
-    },
-    {
-      id: 2,
-      file: 'DBMS_Unit3_Normalization.pdf',
-      document_id: 1,
-      page: 15,
-      score: 0.82,
-      snippet:
-        'Decompositions are said to be lossless-join if the natural join of the decomposed relations yields exactly the original relation without spurious tuples.',
-      bboxes: [{ x0: 0.1, y0: 0.4, x1: 0.85, y1: 0.55 }],
-    },
-  ];
-
-  onSources(sampleSources);
   onDone({ message_id: Date.now(), latency_ms: 1450 });
 }

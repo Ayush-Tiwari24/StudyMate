@@ -1,11 +1,10 @@
-import client, { getToken } from './client';
+import client from './client';
 import {
   mockListDocuments,
   mockUploadDocument,
   mockGetDocumentStatus,
   mockDeleteDocument,
   mockRetryDocument,
-  mockGetDocumentFileUrl,
 } from './mock/documents';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
@@ -42,20 +41,6 @@ export const retryDocument = (documentId) => {
   return client.post(`/documents/${documentId}/retry`);
 };
 
-export const getDocumentFileUrl = (documentId) => {
-  if (USE_MOCK) return mockGetDocumentFileUrl(documentId);
-  const base = import.meta.env.VITE_API_URL
-    ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
-    : '/api';
-  const token = getToken();
-  return `${base}/documents/${documentId}/file${token ? `?token=${encodeURIComponent(token)}` : ''}`;
-};
-
-export const fetchDocumentBlob = (documentId) => {
-  return client.get(`/documents/${documentId}/file`, {
-    responseType: 'blob',
-  });
-};
 
 export const getStorageUsage = () => {
   return client.get('/documents/usage');

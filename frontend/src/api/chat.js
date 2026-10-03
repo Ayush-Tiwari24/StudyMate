@@ -63,7 +63,6 @@ export async function streamQuestion({
   top_k,
   signal,
   onToken,
-  onSources,
   onDone,
   onError,
 }) {
@@ -72,7 +71,6 @@ export async function streamQuestion({
       question,
       document_ids: documentIds,
       onToken,
-      onSources,
       onDone,
       onError,
     });
@@ -159,8 +157,6 @@ export async function streamQuestion({
           const parsed = JSON.parse(dataStr);
           if (eventType === 'token') {
             onToken && onToken(parsed.text || parsed.token || '');
-          } else if (eventType === 'sources') {
-            onSources && onSources(parsed.sources || []);
           } else if (eventType === 'done') {
             onDone && onDone(parsed);
           } else if (eventType === 'error') {

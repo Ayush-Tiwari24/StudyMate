@@ -7,7 +7,6 @@ export default function AnswerActions({
   messageId,
   question,
   answer,
-  sources = [],
   onRetry,
 }) {
   const [copied, setCopied] = useState(false);
@@ -26,8 +25,6 @@ export default function AnswerActions({
     saveNote({
       question,
       answer,
-      sources,
-      document_name: sources[0]?.file || sources[0]?.filename || 'Study Notes',
     });
   };
 
@@ -88,7 +85,7 @@ export default function AnswerActions({
           className={`p-1 rounded transition-colors hover:bg-[var(--surface-hover)] ${
             feedback === 1 ? 'text-[var(--accent)]' : 'hover:text-[var(--ink)]'
           }`}
-          title="Accurate citation"
+          title="Helpful"
           aria-label="Thumbs up"
         >
           <ThumbsUp size={13} strokeWidth={1.75} />
@@ -100,7 +97,7 @@ export default function AnswerActions({
           className={`p-1 rounded transition-colors hover:bg-[var(--surface-hover)] ${
             feedback === -1 ? 'text-[var(--status-failed)]' : 'hover:text-[var(--ink)]'
           }`}
-          title="Incorrect citation or answer"
+          title="Not helpful"
           aria-label="Thumbs down"
         >
           <ThumbsDown size={13} strokeWidth={1.75} />

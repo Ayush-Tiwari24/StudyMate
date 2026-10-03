@@ -61,7 +61,6 @@ export default function Library() {
             loading={loading}
             onDelete={remove}
             onRefresh={refresh}
-            onRetry={retry}
           />
         </div>
       </div>

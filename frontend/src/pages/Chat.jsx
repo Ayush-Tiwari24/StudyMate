@@ -8,7 +8,6 @@ import AnswerBlock from '../components/chat/AnswerBlock';
 import ChatInput from '../components/chat/ChatInput';
 import ScopeChips from '../components/chat/ScopeChips';
 import SuggestedQuestions from '../components/chat/SuggestedQuestions';
-import SourcePanel from '../components/source/SourcePanel';
 import KeyboardShortcutsModal from '../components/chat/KeyboardShortcutsModal';
 import { listChats, getChat, createChat } from '../api/chat';
 import { PanelLeft, PanelLeftClose, HelpCircle } from 'lucide-react';
@@ -28,14 +27,8 @@ export default function Chat() {
 
   // Desktop layout toggles
   const [shelfOpen, setShelfOpen] = useState(true);
-  const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
-  const [activeSources, setActiveSources] = useState([]);
-  const [activeCitationIndex, setActiveCitationIndex] = useState(1);
-  const [lastQuery, setLastQuery] = useState('');
-  const [isSourceExpanded, setIsSourceExpanded] = useState(false);
-  const prevSourceWidthRef = useRef(384);
 
-  // Resizable sidebars
+  // Resizable shelf sidebar
   const {
     width: shelfWidth,
     setWidth: setShelfWidth,
@@ -45,39 +38,13 @@ export default function Chat() {
   } = useResizableSidebar({
     initialWidth: 288,
     minWidth: 200,
-    maxWidth: () => Math.min(520, Math.floor(window.innerWidth - (sourcePanelOpen ? sourceWidth : 0) - 380)),
+    maxWidth: () => Math.min(520, Math.floor(window.innerWidth - 380)),
     storageKey: 'studymate_shelf_width',
     direction: 'left',
   });
 
-  const {
-    width: sourceWidth,
-    setWidth: setSourceWidth,
-    isDragging: isDraggingSource,
-    startResize: startSourceResize,
-    resetWidth: resetSourceWidth,
-  } = useResizableSidebar({
-    initialWidth: 384,
-    minWidth: 280,
-    maxWidth: () => Math.min(800, Math.floor(window.innerWidth - (shelfOpen ? shelfWidth : 0) - 380)),
-    storageKey: 'studymate_source_width',
-    direction: 'right',
-  });
-
-  const handleToggleSourceExpand = () => {
-    if (isSourceExpanded) {
-      setSourceWidth(prevSourceWidthRef.current || 384);
-      setIsSourceExpanded(false);
-    } else {
-      prevSourceWidthRef.current = sourceWidth;
-      const targetExpanded = Math.min(800, Math.max(680, Math.floor(window.innerWidth * 0.52)));
-      setSourceWidth(targetExpanded);
-      setIsSourceExpanded(true);
-    }
-  };
-
-  // Mobile layout state (< 900px)
-  const [mobileTab, setMobileTab] = useState('answer'); // 'shelf' | 'answer' | 'source'
+  // Mobile layout state (< 900px): two tabs: 'shelf' | 'answer'
+  const [mobileTab, setMobileTab] = useState('answer');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
   // Keyboard shortcut modal
@@ -93,15 +60,11 @@ export default function Chat() {
   // Handle window resize for mobile breakpoint
   useEffect(() => {
     const handleResize = () => {
-      const mobile = window.innerWidth < 900;
-      setIsMobile(mobile);
-      if (mobile && sourcePanelOpen && mobileTab !== 'source') {
-        // on mobile keep source panel controlled by mobile tab
-      }
+      setIsMobile(window.innerWidth < 900);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [sourcePanelOpen, mobileTab]);
+  }, []);
 
   // Load chat list
   const loadChatsList = useCallback(async () => {
@@ -134,7 +97,6 @@ export default function Chat() {
         return;
       }
 
-      // If we already have this chat session in memory, don't wipe active in-flight messages
       if (currentChatRef.current && String(currentChatRef.current.id) === String(chatId)) {
         return;
       }
@@ -147,16 +109,6 @@ export default function Chat() {
         setMessages(msgs);
         if (res.data.document_ids && res.data.document_ids.length > 0) {
           setSelectedDocIds(res.data.document_ids);
-        }
-        // Initialize activeSources from the most recent assistant message with sources
-        if (msgs.length > 0) {
-          const lastWithSources = [...msgs]
-            .reverse()
-            .find((m) => m.role === 'assistant' && m.sources && m.sources.length > 0);
-          if (lastWithSources) {
-            setActiveSources(lastWithSources.sources);
-            setActiveCitationIndex(1);
-          }
         }
       } catch (err) {
         console.error('Failed to load chat session:', err);
@@ -174,41 +126,25 @@ export default function Chat() {
 
   // Handle message completion from streaming hook
   const handleMessageComplete = useCallback(
-    ({ content, sources, messageId }) => {
+    ({ content, messageId }) => {
       setMessages((prev) => [
         ...prev,
         {
           id: messageId || Date.now(),
           role: 'assistant',
           content,
-          sources: sources || [],
           created_at: new Date().toISOString(),
         },
       ]);
-
-      if (sources && sources.length > 0) {
-        setActiveSources(sources);
-        setActiveCitationIndex(1);
-        setSourcePanelOpen(true);
-      }
       loadChatsList();
     },
     [loadChatsList]
   );
 
-  const { ask, isStreaming, streamedText, streamedSources } = useChatStream({
+  const { ask, isStreaming, streamedText } = useChatStream({
     chatId: currentChat?.id,
     onMessageComplete: handleMessageComplete,
   });
-
-  // Whenever streamed sources arrive during generation, show them in panel
-  useEffect(() => {
-    if (streamedSources && streamedSources.length > 0) {
-      setActiveSources(streamedSources);
-      setActiveCitationIndex(1);
-      setSourcePanelOpen(true);
-    }
-  }, [streamedSources]);
 
   // Send question handler
   const handleSendQuestion = async (overrideText) => {
@@ -217,7 +153,6 @@ export default function Chat() {
 
     isSendingRef.current = true;
     try {
-      setLastQuery(q);
       let activeChatId = currentChat?.id;
 
       if (!activeChatId) {
@@ -262,46 +197,6 @@ export default function Chat() {
     }
   };
 
-  // Open citation in source panel
-  const handleSelectCitation = (source, index, messageSources = []) => {
-    let listToUse = [];
-    if (messageSources && messageSources.length > 0) {
-      listToUse = messageSources;
-    } else if (activeSources && activeSources.length > 0) {
-      listToUse = activeSources;
-    } else if (source) {
-      listToUse = [source];
-    }
-
-    if (listToUse.length > 0) {
-      setActiveSources(listToUse);
-    }
-
-    let targetIndex = index || 1;
-    if (source && listToUse.length > 0) {
-      const idx = listToUse.findIndex(
-        (s) =>
-          (s.id && source.id && s.id === source.id) ||
-          (s.file === source.file && s.page === source.page) ||
-          (s.snippet && source.snippet && s.snippet === source.snippet)
-      );
-      if (idx !== -1) {
-        targetIndex = idx + 1;
-      }
-    }
-
-    if (listToUse.length > 0) {
-      if (targetIndex < 1) targetIndex = 1;
-      if (targetIndex > listToUse.length) targetIndex = listToUse.length;
-    }
-
-    setActiveCitationIndex(targetIndex);
-    setSourcePanelOpen(true);
-    if (isMobile) {
-      setMobileTab('source');
-    }
-  };
-
   // Toggle document selection
   const handleToggleDoc = (docId) => {
     setSelectedDocIds((prev) =>
@@ -313,26 +208,16 @@ export default function Chat() {
     setSelectedDocIds((prev) => prev.filter((id) => id !== docId));
   };
 
-  // Register hotkeys (/ focus, Esc close, 1-9 jump citation, ? help)
+  // Register hotkeys (/ focus input, ? cheatsheet modal)
   useHotkeys(
     {
       '/': () => textareaRef.current?.focus(),
       Escape: () => {
         if (shortcutsModalOpen) setShortcutsModalOpen(false);
-        else setSourcePanelOpen(false);
       },
       '?': () => setShortcutsModalOpen((prev) => !prev),
-      1: () => activeSources[0] && handleSelectCitation(activeSources[0], 1),
-      2: () => activeSources[1] && handleSelectCitation(activeSources[1], 2),
-      3: () => activeSources[2] && handleSelectCitation(activeSources[2], 3),
-      4: () => activeSources[3] && handleSelectCitation(activeSources[3], 4),
-      5: () => activeSources[4] && handleSelectCitation(activeSources[4], 5),
-      6: () => activeSources[5] && handleSelectCitation(activeSources[5], 6),
-      7: () => activeSources[6] && handleSelectCitation(activeSources[6], 7),
-      8: () => activeSources[7] && handleSelectCitation(activeSources[7], 8),
-      9: () => activeSources[8] && handleSelectCitation(activeSources[8], 9),
     },
-    [shortcutsModalOpen, activeSources]
+    [shortcutsModalOpen]
   );
 
   // Group messages into Q&A exchanges
@@ -341,8 +226,6 @@ export default function Chat() {
     const msg = messages[i];
     if (msg.role === 'user') {
       const nextMsg = messages[i + 1]?.role === 'assistant' ? messages[i + 1] : null;
-      // If streaming and this is the active user message waiting for assistant response,
-      // skip it from completed exchanges so it is NOT rendered twice (it renders in the active streaming block below)
       if (isStreaming && !nextMsg && i === messages.length - 1) {
         continue;
       }
@@ -350,7 +233,6 @@ export default function Chat() {
         id: msg.id,
         question: msg.content,
         answer: nextMsg ? nextMsg.content : '',
-        sources: nextMsg ? nextMsg.sources || [] : [],
         isComplete: !!nextMsg,
       });
       if (nextMsg) i++;
@@ -359,14 +241,10 @@ export default function Chat() {
         id: msg.id,
         question: '',
         answer: msg.content,
-        sources: msg.sources || [],
         isComplete: true,
       });
     }
   }
-
-  // Active selected document objects for ScopeChips
-  const selectedDocs = documents.filter((d) => selectedDocIds.includes(d.id));
 
   // Determine currently streaming question
   const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
@@ -395,16 +273,6 @@ export default function Chat() {
           >
             Answer Desk
           </button>
-          <button
-            onClick={() => setMobileTab('source')}
-            className={`flex-1 h-full border-b-2 font-medium transition-colors ${
-              mobileTab === 'source'
-                ? 'border-[var(--accent)] text-[var(--accent)]'
-                : 'border-transparent text-[var(--muted)]'
-            }`}
-          >
-            Source ({activeSources.length})
-          </button>
         </div>
       )}
 
@@ -428,8 +296,6 @@ export default function Chat() {
                 navigate('/chat');
                 setMessages([]);
                 setCurrentChat(null);
-                setActiveSources([]);
-                setSourcePanelOpen(false);
                 if (isMobile) setMobileTab('answer');
               }}
               className="h-full"
@@ -508,7 +374,7 @@ export default function Chat() {
                       A reading desk for your study notes.
                     </h1>
                     <p className="text-sm text-[var(--muted)] font-sans max-w-md mx-auto">
-                      Ask any question about your uploaded PDFs. Every answer is grounded directly in the text with verified page citations.
+                      Ask any question about your uploaded PDFs. Answers come only from your documents.
                     </p>
                   </div>
 
@@ -524,10 +390,6 @@ export default function Chat() {
                   messageId={ex.id}
                   question={ex.question}
                   answer={ex.answer}
-                  sources={ex.sources}
-                  onSelectCitation={(src, idx, allSources) =>
-                    handleSelectCitation(src, idx, allSources || ex.sources)
-                  }
                   onRetry={() => handleSendQuestion(ex.question)}
                   onSelectMoreDocuments={() => {
                     if (isMobile) setMobileTab('shelf');
@@ -591,65 +453,6 @@ export default function Chat() {
               />
             </div>
           </main>
-        )}
-
-        {!isMobile && sourcePanelOpen && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize Evidence Panel"
-            aria-valuenow={sourceWidth}
-            aria-valuemin={280}
-            aria-valuemax={800}
-            tabIndex={0}
-            onMouseDown={startSourceResize}
-            onTouchStart={startSourceResize}
-            onDoubleClick={resetSourceWidth}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowLeft') setSourceWidth((w) => Math.min(800, w + 16));
-              else if (e.key === 'ArrowRight') setSourceWidth((w) => Math.max(280, w - 16));
-              else if (e.key === 'Enter' || e.key === 'Home') resetSourceWidth();
-            }}
-            title="Drag to resize citation panel · Double-click to reset"
-            className={`group relative w-1 -mr-0.5 cursor-col-resize flex-shrink-0 select-none z-30 transition-colors ${
-              isDraggingSource ? 'bg-[var(--accent)]' : 'bg-transparent hover:bg-[var(--line)]'
-            }`}
-          >
-            <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
-            <div
-              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-all ${
-                isDraggingSource
-                  ? 'bg-[var(--accent)] opacity-100 scale-y-125'
-                  : 'bg-[var(--muted)] opacity-0 group-hover:opacity-70'
-              }`}
-            />
-          </div>
-        )}
-
-        {(!isMobile || mobileTab === 'source') && (
-          <div
-            style={!isMobile && sourcePanelOpen ? { width: `${sourceWidth}px` } : undefined}
-            className={`${isMobile ? 'w-full' : sourcePanelOpen ? 'flex' : 'hidden'} flex-shrink-0 h-full ${
-              isDraggingSource ? 'transition-none' : 'transition-all duration-150'
-            }`}
-          >
-            <SourcePanel
-              isOpen={isMobile ? true : sourcePanelOpen}
-              onClose={() => {
-                if (isMobile) setMobileTab('answer');
-                else setSourcePanelOpen(false);
-              }}
-              sources={activeSources}
-              activeCitationIndex={activeCitationIndex}
-              onSelectCitation={(src, idx) => {
-                setActiveCitationIndex(idx);
-              }}
-              query={lastQuery}
-              className="w-full"
-              isExpanded={isSourceExpanded}
-              onToggleExpand={handleToggleSourceExpand}
-            />
-          </div>
         )}
       </div>
 

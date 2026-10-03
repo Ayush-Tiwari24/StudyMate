@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useNotes } from '../context/NotesContext';
-import { Download, Trash2, Bookmark, Copy, Check, FileText, Calendar, BookOpen } from 'lucide-react';
+import { Download, Trash2, Bookmark, Copy, Check, FileText, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Notes() {
@@ -29,7 +29,7 @@ export default function Notes() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Pre-process note text to break crowded list items and format citations
+  // Pre-process note text to break crowded list items
   const formatNoteText = (text) => {
     if (!text) return '';
     let formatted = text;
@@ -37,14 +37,10 @@ export default function Notes() {
     formatted = formatted.replace(/([^\n])\s+(\d+\.\s+\*\*)/g, '$1\n\n$2');
     // Break bullet points running together
     formatted = formatted.replace(/([^\n])\s+([•\-*]\s+\*\*)/g, '$1\n\n$2');
-    // Break sentences followed by numbered items like "... [5] 8. **Stable..."
-    formatted = formatted.replace(/\]\s*(\d+\.\s+)/g, ']\n\n$1');
-    // Format citation tags into markdown links
-    formatted = formatted.replace(/\[(\d+)\]/g, '[$1](#cite-$1)');
     return formatted;
   };
 
-  // Export to Markdown file
+  // Export to Markdown file (plain questions and answers only)
   const handleExportMarkdown = () => {
     if (savedNotes.length === 0) return;
 
@@ -54,13 +50,6 @@ export default function Notes() {
     filteredNotes.forEach((n, idx) => {
       content += `### ${idx + 1}. ${n.question}\n\n`;
       content += `${n.answer}\n\n`;
-      if (n.sources && n.sources.length > 0) {
-        content += `**Citations:**\n`;
-        n.sources.forEach((s, sIdx) => {
-          content += `- [${sIdx + 1}] ${s.file || s.filename} (Page ${s.page || '?'})\n`;
-        });
-        content += `\n`;
-      }
       content += `---\n\n`;
     });
 
@@ -83,7 +72,7 @@ export default function Notes() {
               Saved Notes
             </h1>
             <p className="text-xs md:text-sm text-[var(--muted)] font-sans mt-1">
-              Answers pinned from your reading desk with original page citations.
+              Answers saved from your reading desk.
             </p>
           </div>
 
@@ -146,10 +135,12 @@ export default function Notes() {
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-[var(--line-subtle)]">
                   <div className="flex flex-col gap-1.5 flex-1">
                     <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--muted)] font-mono">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--surface-muted)] border border-[var(--line-subtle)] text-[var(--ink)] font-medium">
-                        <FileText size={11} className="text-[var(--accent)]" />
-                        {note.document_name || 'Document'}
-                      </span>
+                      {note.document_name && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--surface-muted)] border border-[var(--line-subtle)] text-[var(--ink)] font-medium">
+                          <FileText size={11} className="text-[var(--accent)]" />
+                          {note.document_name}
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1 text-[var(--subtle)]">
                         <Calendar size={11} />
                         {note.savedAt ? new Date(note.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Saved note'}
@@ -192,58 +183,21 @@ export default function Notes() {
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      a: ({ href, children }) => {
-                        if (href && href.startsWith('#cite-')) {
-                          const index = parseInt(href.replace('#cite-', ''), 10);
-                          return (
-                            <span
-                              className="inline-flex items-center justify-center font-mono text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-subtle)] px-1.5 py-0.5 rounded mx-0.5 border border-[var(--accent-subtle)] select-none align-baseline"
-                              title={`Source [${index}]`}
-                            >
-                              [{index}]
-                            </span>
-                          );
-                        }
-                        return (
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[var(--accent)] underline hover:text-[var(--accent-hover)]"
-                          >
-                            {children}
-                          </a>
-                        );
-                      },
+                      a: ({ href, children }) => (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[var(--accent)] underline hover:text-[var(--accent-hover)]"
+                        >
+                          {children}
+                        </a>
+                      ),
                     }}
                   >
                     {formatNoteText(note.answer)}
                   </ReactMarkdown>
                 </div>
-
-                {note.sources && note.sources.length > 0 && (
-                  <div className="pt-4 border-t border-[var(--line-subtle)] flex flex-col gap-2">
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] font-semibold">
-                      Source Citations
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {note.sources.map((src, i) => (
-                        <span
-                          key={i}
-                          className="font-mono text-xs text-[var(--ink)] bg-[var(--surface-muted)] px-2.5 py-1 rounded-[6px] border border-[var(--line)] flex items-center gap-1.5"
-                        >
-                          <span className="font-semibold text-[var(--accent)]">[{i + 1}]</span>
-                          <span className="truncate max-w-[200px]">{src.file || src.filename}</span>
-                          {src.page && (
-                            <span className="text-[var(--muted)] border-l border-[var(--line)] pl-1.5">
-                              p.{src.page}
-                            </span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -252,4 +206,3 @@ export default function Notes() {
     </div>
   );
 }
-
