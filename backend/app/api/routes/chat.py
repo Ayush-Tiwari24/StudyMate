@@ -223,45 +223,66 @@ async def ask_question(
 
     # Stream the response via SSE (zero DB connections held during streaming)
     async def event_stream() -> AsyncGenerator[str, None]:
+        import asyncio
         full_answer = ""
 
         # Send initial keep-alive comment so proxy buffers are flushed immediately
         yield ": ready\n\n"
 
-        try:
-            from app.services.generation.rag_chain import rag_query
-            last_ping_time = time.time()
+        queue: asyncio.Queue = asyncio.Queue()
+        sentinel = object()
 
-            async for event in rag_query(
-                question=body.question,
-                chat_id=chat_id,
-                user_id=current_user_id,
-                document_ids=doc_ids,
-                top_k=body.top_k or user_prefs.get("top_k"),
-                db=None,
-                user_preferences=user_prefs,
-                timer=timer,
-                prefetched_history=prefetched_history,
-                prefetched_doc_titles=prefetched_doc_titles,
-            ):
+        from app.services.generation.rag_chain import rag_query
+
+        async def producer():
+            try:
+                async for evt in rag_query(
+                    question=body.question,
+                    chat_id=chat_id,
+                    user_id=current_user_id,
+                    document_ids=doc_ids,
+                    top_k=body.top_k or user_prefs.get("top_k"),
+                    db=None,
+                    user_preferences=user_prefs,
+                    timer=timer,
+                    prefetched_history=prefetched_history,
+                    prefetched_doc_titles=prefetched_doc_titles,
+                ):
+                    await queue.put(evt)
+            except Exception as e:
+                await queue.put(e)
+            finally:
+                await queue.put(sentinel)
+
+        producer_task = asyncio.create_task(producer())
+
+        try:
+            while True:
                 if await request.is_disconnected():
                     logger.info(f"Client disconnected from SSE stream for chat {chat_id}")
+                    producer_task.cancel()
                     return
 
-                now = time.time()
-                if now - last_ping_time > 15.0:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
                     yield ": ping\n\n"
-                    last_ping_time = now
+                    continue
 
-                if event["type"] == "token":
+                if event is sentinel:
+                    break
+                if isinstance(event, Exception):
+                    logger.error(f"RAG query error: {event}")
+                    yield f"event: error\ndata: {json.dumps({'message': str(event)})}\n\n"
+                    return
+
+                if event.get("type") == "token":
                     full_answer += event["text"]
                     yield f"event: token\ndata: {json.dumps({'text': event['text']})}\n\n"
-                    last_ping_time = now
 
-        except Exception as e:
-            logger.error(f"RAG query error: {e}")
-            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
-            return
+        finally:
+            if not producer_task.done():
+                producer_task.cancel()
 
         # Determine model name used for message audit record
         from app.core.config import settings as app_settings
@@ -276,22 +297,25 @@ async def ask_question(
         else:
             model_name = app_settings.ollama_model
 
-        # 2. Short final transaction: save assistant message
-        with timer.measure("save"):
-            save_db = SessionLocal()
-            try:
-                assistant_msg = Message(
-                    chat_id=chat_id,
-                    role="assistant",
-                    content=full_answer,
-                    model_used=model_name,
-                    latency_ms=int(timer.timings.get("total_ms", 0)),
-                )
-                save_db.add(assistant_msg)
-                save_db.commit()
-                saved_msg_id = assistant_msg.id
-            finally:
-                save_db.close()
+        # 2. Short final transaction: save assistant message in worker thread
+        def _save_assistant_message() -> int:
+            with timer.measure("save"):
+                save_db = SessionLocal()
+                try:
+                    assistant_msg = Message(
+                        chat_id=chat_id,
+                        role="assistant",
+                        content=full_answer,
+                        model_used=model_name,
+                        latency_ms=int(timer.timings.get("total_ms", 0)),
+                    )
+                    save_db.add(assistant_msg)
+                    save_db.commit()
+                    return assistant_msg.id
+                finally:
+                    save_db.close()
+
+        saved_msg_id = await asyncio.to_thread(_save_assistant_message)
 
         timings = timer.finish()
         latency_ms = int(timings.get("total_ms", 0))

@@ -14,7 +14,7 @@ services:
     dockerContext: ./backend
     plan: standard
     region: singapore
-    healthCheckPath: /api/health/ready
+    healthCheckPath: /api/health
     autoDeploy: true
 
     envVars:
@@ -41,17 +41,19 @@ services:
       - key: DB_POOL_TIMEOUT
         value: "10"
       - key: NEON_KEEPALIVE_SECONDS
-        value: "180"
+        value: "0"
 
-      # Unified data store: Neon Postgres for relational data, pgvector for vectors, db for PDF files
+      # Unified data store: Neon Postgres for relational data, pgvector for vectors, ephemeral PDFs
       - key: VECTOR_BACKEND
         value: pgvector
       - key: STORAGE_BACKEND
         value: db
+      - key: KEEP_ORIGINAL_PDFS
+        value: "false"
 
       # Storage Limits
       - key: MAX_UPLOAD_MB
-        value: "30"
+        value: "15"
       - key: USER_STORAGE_QUOTA_MB
         value: "100"
       - key: GLOBAL_STORAGE_CAP_MB

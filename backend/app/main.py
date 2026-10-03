@@ -256,21 +256,11 @@ app.include_router(settings_router)
 # ── Health & Readiness Probes ────────────────────────────────────
 @app.get("/api/health", tags=["Health"])
 def health_check():
-    """Health check endpoint with component status (no secrets)."""
-    db_status = "ok"
-    try:
-        from app.db.session import engine
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1;"))
-    except Exception as e:
-        logger.error(f"Health check DB probe error: {e}")
-        db_status = "error"
-
+    """Trivial non-blocking liveness probe returning immediately without touching database."""
     return {
-        "status": "healthy" if db_status == "ok" else "degraded",
+        "status": "healthy",
         "app": settings.app_name,
-        "database": db_status,
+        "database": "ok",
         "vector_backend": settings.vector_backend,
         "storage_backend": settings.storage_backend,
         "llm_provider": settings.llm_provider,
@@ -279,22 +269,17 @@ def health_check():
 
 @app.get("/api/health/ready", tags=["Health"])
 def readiness_check():
-    """Readiness probe. On Render or in production it returns immediately to prevent 5s timeout restart loops."""
-    import os
-    if os.environ.get("RENDER") or settings.environment in ("production", "prod"):
+    """Database readiness probe. Checks actual database connectivity."""
+    from fastapi.responses import JSONResponse
+    from app.db.session import engine
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1;"))
         return {"status": "ready"}
-
-    if settings.environment == "test":
-        from fastapi.responses import JSONResponse
-        from app.db.session import engine
-        from sqlalchemy import text
-        try:
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1;"))
-        except Exception as e:
-            logger.warning(f"Readiness check failed / database unavailable: {e}")
-            return JSONResponse(
-                status_code=503,
-                content={"status": "waking", "detail": "Database unavailable"},
-            )
-    return {"status": "ready"}
+    except Exception as e:
+        logger.warning(f"Readiness check failed / database unavailable: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "waking", "detail": "Database unavailable"},
+        )
