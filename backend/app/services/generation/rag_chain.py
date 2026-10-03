@@ -120,6 +120,66 @@ class ReasoningFilter:
         return ""
 
 
+class CitationFilter:
+    """
+    Strips stray citation markers such as [1], [2], [1, 2], [1-3] from streaming tokens.
+    Handles markers split across streaming token boundaries.
+    """
+    def __init__(self):
+        self.buffer = ""
+
+    def process(self, text: str) -> str:
+        if not text:
+            return ""
+        self.buffer += text
+        output = []
+
+        while self.buffer:
+            bracket_idx = self.buffer.find("[")
+            if bracket_idx == -1:
+                output.append(self.buffer)
+                self.buffer = ""
+                break
+
+            if bracket_idx > 0:
+                output.append(self.buffer[:bracket_idx])
+                self.buffer = self.buffer[bracket_idx:]
+
+            # Buffer starts with '['
+            close_idx = self.buffer.find("]")
+            if close_idx != -1:
+                inside = self.buffer[1:close_idx]
+                if re.fullmatch(r'\s*\d+(?:\s*[,–-]\s*\d+)*\s*', inside):
+                    # Citation marker found: strip it
+                    self.buffer = self.buffer[close_idx + 1:]
+                    continue
+                else:
+                    # Non-citation bracketed content (e.g. [markdown](url) or [tag])
+                    output.append(self.buffer[:close_idx + 1])
+                    self.buffer = self.buffer[close_idx + 1:]
+            else:
+                # No closing bracket yet.
+                # If characters after '[' only match valid citation inner characters, hold it
+                after = self.buffer[1:]
+                if re.fullmatch(r'[\d\s,\-–]*', after) and len(self.buffer) < 30:
+                    # Potential split citation marker; wait for next chunk
+                    break
+                else:
+                    # Not a citation marker
+                    output.append(self.buffer[0])
+                    self.buffer = self.buffer[1:]
+
+        return "".join(output)
+
+    def flush(self) -> str:
+        res = self.buffer
+        self.buffer = ""
+        # If left with an unclosed citation marker e.g. "[1", strip it
+        if re.fullmatch(r'\[\s*\d+(?:\s*[,–-]\s*\d*)*', res):
+            return ""
+        return res
+
+
 def clean_rewritten_query(raw_text: str) -> str:
     """
     Clean the output from a question rewrite model.
@@ -329,7 +389,6 @@ async def rag_query(
     # ── Step 4: Handle "not found" case ────────────────────────
     if not chunks:
         yield {"type": "token", "text": NOT_FOUND_MESSAGE}
-        yield {"type": "sources", "sources": []}
         return
 
     # Filter out promotional/advertisement cover pages if other chunks exist
@@ -369,24 +428,25 @@ async def rag_query(
     )
 
     reasoning_filter = ReasoningFilter()
+    citation_filter = CitationFilter()
     full_answer_parts = []
 
     try:
         async for chunk in llm.astream(prompt):
-            token_text = reasoning_filter.process_chunk(chunk)
+            raw_text = reasoning_filter.process_chunk(chunk)
+            token_text = citation_filter.process(raw_text)
             if token_text:
                 if timer:
                     timer.record_first_token()
                     timer.record_token()
                 full_answer_parts.append(token_text)
                 yield {"type": "token", "text": token_text}
-        tail = reasoning_filter.flush()
+        tail_reasoning = reasoning_filter.flush()
+        tail = citation_filter.process(tail_reasoning) + citation_filter.flush()
         if tail:
             if timer:
                 timer.record_first_token()
                 timer.record_token()
-            full_answer_parts.append(tail)
-            yield {"type": "token", "text": tail}
             full_answer_parts.append(tail)
             yield {"type": "token", "text": tail}
     except Exception as e:
@@ -403,12 +463,15 @@ async def rag_query(
                     temperature=pref_temp,
                 )
                 fb_filter = ReasoningFilter()
+                fb_citation = CitationFilter()
                 async for chunk in fb_llm.astream(prompt):
-                    token_text = fb_filter.process_chunk(chunk)
+                    raw_text = fb_filter.process_chunk(chunk)
+                    token_text = fb_citation.process(raw_text)
                     if token_text:
                         full_answer_parts.append(token_text)
                         yield {"type": "token", "text": token_text}
-                tail = fb_filter.flush()
+                tail_fb = fb_filter.flush()
+                tail = fb_citation.process(tail_fb) + fb_citation.flush()
                 if tail:
                     full_answer_parts.append(tail)
                     yield {"type": "token", "text": tail}
@@ -418,26 +481,3 @@ async def rag_query(
         else:
             yield {"type": "token", "text": f"\n\n[Error: {str(e)}]"}
 
-    # ── Step 8: Yield sources (matching citations in answer) ────
-    full_answer_text = "".join(full_answer_parts)
-    cited_ids = {int(m) for m in re.findall(r'\[(\d+)\]', full_answer_text)}
-
-    sources = []
-    for i, chunk in enumerate(chunks):
-        meta = chunk["metadata"]
-        sources.append({
-            "id": i + 1,
-            "file": meta.get("filename", "unknown"),
-            "document_id": meta.get("document_id"),
-            "page": meta.get("page"),
-            "score": chunk.get("score"),
-            "snippet": chunk["content"][:200],
-        })
-
-    # Filter to only return sources cited inline [1], [2], etc., if citations are present
-    if cited_ids:
-        cited_sources = [s for s in sources if s["id"] in cited_ids]
-        if cited_sources:
-            sources = cited_sources
-
-    yield {"type": "sources", "sources": sources}

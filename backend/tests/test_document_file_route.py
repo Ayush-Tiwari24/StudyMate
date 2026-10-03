@@ -82,7 +82,7 @@ def _get_auth_headers(email: str, name: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_download_document_file_success():
+def test_download_document_file_route_removed_returns_404():
     headers = _get_auth_headers("downloader@test.com", "Downloader")
     pdf_bytes = _create_sample_pdf("Lecture Notes for Algorithms")
 
@@ -95,31 +95,9 @@ def test_download_document_file_success():
     assert upload_res.status_code in (200, 202)
     doc_id = upload_res.json()["document_id"]
 
-    # Download document file
+    # Calling removed /file route returns 404 Not Found
     file_res = client.get(f"/api/documents/{doc_id}/file", headers=headers)
-    assert file_res.status_code == 200
-    assert file_res.headers["content-type"] == "application/pdf"
-    assert "algorithms.pdf" in file_res.headers.get("content-disposition", "")
-    assert int(file_res.headers.get("content-length", 0)) == len(pdf_bytes)
-    assert file_res.content == pdf_bytes
-
-
-def test_download_document_tenancy_isolation():
-    user1_headers = _get_auth_headers("user1@test.com", "User One")
-    user2_headers = _get_auth_headers("user2@test.com", "User Two")
-
-    pdf_bytes = _create_sample_pdf("User 1 Secret Notes")
-    upload_res = client.post(
-        "/api/documents/upload",
-        headers=user1_headers,
-        files={"file": ("secret.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
-    )
-    doc_id = upload_res.json()["document_id"]
-
-    # User 2 tries to download User 1's file
-    res = client.get(f"/api/documents/{doc_id}/file", headers=user2_headers)
-    assert res.status_code == 404
-    assert "not found" in res.json()["detail"].lower()
+    assert file_res.status_code == 404
 
 
 def test_storage_usage_endpoints():

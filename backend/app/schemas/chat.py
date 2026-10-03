@@ -38,24 +38,12 @@ class FeedbackRequest(BaseModel):
 from pydantic import BaseModel, Field, ConfigDict
 
 
-class SourceResponse(BaseModel):
-    id: int
-    file: str  # filename
-    document_id: Optional[int] = None
-    page: Optional[int] = None
-    score: Optional[float] = None
-    snippet: Optional[str] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class MessageResponse(BaseModel):
     id: int
     role: str
     content: str
     model_used: Optional[str] = None
     latency_ms: Optional[int] = None
-    sources: list[SourceResponse] = []
     feedback_value: Optional[int] = None
     created_at: datetime
 

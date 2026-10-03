@@ -181,7 +181,6 @@ def test_pipeline_respects_user_top_k():
     with patch("app.services.generation.rag_chain.rag_query") as mock_rag_query:
         async def fake_rag_stream(**kwargs):
             yield {"type": "token", "text": "Hello"}
-            yield {"type": "sources", "sources": []}
 
         mock_rag_query.side_effect = fake_rag_stream
 

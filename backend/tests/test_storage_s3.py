@@ -76,10 +76,8 @@ def test_s3_storage_operations(monkeypatch):
         assert key.endswith("syllabus.pdf")
         assert storage.exists(key) is True
 
-        # 2. Open & Open Stream
+        # 2. Open
         assert storage.open(key) == b"%PDF-1.4 test content"
-        stream = storage.open_stream(key)
-        assert stream.read() == b"%PDF-1.4 test content"
 
         # 3. Delete
         storage.delete(key)

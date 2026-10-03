@@ -18,8 +18,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.models.user import User
-from app.models.stored_file import StoredFile
-from app.services.storage import DatabaseStorage, DatabaseStream
+from app.services.storage import DatabaseStorage
 import app.services.storage as storage_module
 import app.db.session as session_module
 
@@ -71,34 +70,6 @@ def test_database_storage_save_open_exists():
     assert read_bytes == content
 
 
-def test_database_storage_streaming():
-    storage = DatabaseStorage()
-    # 256 KB test content
-    content = b"ABCDEFGH12345678" * 16384  # 262,144 bytes
-    key = storage.save(user_id=101, filename="large_notes.pdf", content=content)
-
-    stream = storage.open_stream(key)
-    assert isinstance(stream, DatabaseStream)
-    assert stream.total_size == len(content)
-
-    # Test small chunk reads
-    chunk1 = stream.read(1024)
-    assert chunk1 == content[:1024]
-
-    chunk2 = stream.read(2048)
-    assert chunk2 == content[1024:3072]
-
-    # Test read remaining
-    rest = stream.read()
-    assert rest == content[3072:]
-
-    # Test read at EOF returns empty bytes
-    assert stream.read(100) == b""
-
-    # Test iteration over stream
-    stream2 = storage.open_stream(key)
-    collected = b"".join(list(stream2))
-    assert collected == content
 
 
 def test_database_storage_delete_and_cascade():

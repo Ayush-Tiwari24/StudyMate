@@ -173,9 +173,6 @@ def test_full_document_deletion_lifecycle():
     assert len(chat_data["messages"]) == 1
     surviving_msg = chat_data["messages"][0]
     assert surviving_msg["content"] == "Paxos guarantees safety."
-    assert len(surviving_msg["sources"]) == 1
-    surviving_source = surviving_msg["sources"][0]
-    assert surviving_source["document_id"] is None
-    assert surviving_source["file"] == "source removed"
+    assert "sources" not in surviving_msg
 
     verify_db.close()

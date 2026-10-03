@@ -161,9 +161,11 @@ erDiagram
 - **Lifecycle**: Persisted when the user asks a question and as the SSE stream concludes. Deleting the parent chat removes all messages.
 
 ### 8. `message_sources`
-- **Role**: Specific evidence citations grounding an assistant's response.
+> **NOTE (Unused)**: The citation and source-display feature has been completely removed in favor of direct, plain-text academic QA. This table is currently unused by the application and retained for backwards schema compatibility. It can safely be dropped by a future migration.
+
+- **Role**: (Legacy) Specific evidence citations grounding an assistant's response.
 - **Integrity**: `ondelete="SET NULL"` on `document_id`. If an underlying study document is deleted, previous chat history remains legible; `document_id` becomes `NULL`, and the UI displays `"source removed"` while preserving the cited snippet and page number.
-- **Lifecycle**: Created immediately after an assistant message is generated with retrieved citations.
+- **Lifecycle**: Retained in database schema for legacy data; no new rows are inserted.
 
 ### 9. `feedback`
 - **Role**: User quality evaluations (thumbs up / thumbs down) for assistant responses.

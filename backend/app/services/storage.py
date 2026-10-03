@@ -47,11 +47,6 @@ class BaseStorage(ABC):
         pass
 
     @abstractmethod
-    def open_stream(self, key: str):
-        """Return a readable binary stream for the given storage key."""
-        pass
-
-    @abstractmethod
     def delete(self, key: str) -> None:
         """Delete the file matching the storage key."""
         pass
@@ -100,12 +95,6 @@ class LocalStorage(BaseStorage):
             raise FileNotFoundError(f"File not found: {key}")
         with open(path, "rb") as f:
             return f.read()
-
-    def open_stream(self, key: str):
-        path = self._resolve(key)
-        if not path.exists():
-            raise FileNotFoundError(f"File not found: {key}")
-        return open(path, "rb")
 
     def delete(self, key: str) -> None:
         path = self._resolve(key)
@@ -164,10 +153,6 @@ class S3Storage(BaseStorage):
         response = self.s3.get_object(Bucket=self.bucket, Key=key)
         return response["Body"].read()
 
-    def open_stream(self, key: str):
-        response = self.s3.get_object(Bucket=self.bucket, Key=key)
-        return response["Body"]
-
     def delete(self, key: str) -> None:
         self.s3.delete_object(Bucket=self.bucket, Key=key)
         logger.info(f"S3Storage deleted: s3://{self.bucket}/{key}")
@@ -194,74 +179,6 @@ class S3Storage(BaseStorage):
             logger.info(f"S3Storage deleted all objects with prefix: {prefix}")
         except Exception as e:
             logger.warning(f"S3Storage error deleting prefix {prefix}: {e}")
-
-
-class DatabaseStream(io.RawIOBase):
-    """
-    Streaming reader for database-stored files (Postgres bytea / SQLite BLOB).
-    Queries SQL slices in chunks using substring / substr to stream to HTTP clients
-    without buffering the entire file into Python RAM twice.
-    """
-
-    def __init__(self, key: str, chunk_size: int = 64 * 1024):
-        super().__init__()
-        self.key = key
-        self.chunk_size = chunk_size
-        self._pos = 0  # 0-indexed byte position in stream
-        self._total_size: Optional[int] = None
-        self._is_postgres = (engine.dialect.name == "postgresql")
-
-        with SessionLocal() as db:
-            row = db.query(StoredFile.size_bytes).filter(StoredFile.key == key).first()
-            if not row:
-                raise FileNotFoundError(f"File not found in database storage: {key}")
-            self._total_size = int(row[0])
-
-    @property
-    def total_size(self) -> int:
-        return self._total_size or 0
-
-    def readable(self) -> bool:
-        return True
-
-    def readinto(self, b) -> int:
-        data = self.read(len(b))
-        n = len(data)
-        b[:n] = data
-        return n
-
-    def read(self, size: int = -1) -> bytes:
-        if self._total_size is None or self._pos >= self._total_size:
-            return b""
-
-        if size is None or size < 0:
-            bytes_to_read = self._total_size - self._pos
-        else:
-            bytes_to_read = min(size, self._total_size - self._pos)
-
-        if bytes_to_read <= 0:
-            return b""
-
-        # SQL substring / substr is 1-based
-        start_1based = self._pos + 1
-        with SessionLocal() as db:
-            if self._is_postgres:
-                sql = text("SELECT substring(data from :start for :len) FROM stored_files WHERE key = :key")
-            else:
-                sql = text("SELECT substr(data, :start, :len) FROM stored_files WHERE key = :key")
-
-            res = db.execute(sql, {"start": start_1based, "len": bytes_to_read, "key": self.key}).scalar()
-
-        chunk = bytes(res) if res is not None else b""
-        self._pos += len(chunk)
-        return chunk
-
-    def __iter__(self):
-        while True:
-            chunk = self.read(self.chunk_size)
-            if not chunk:
-                break
-            yield chunk
 
 
 class DatabaseStorage(BaseStorage):
@@ -306,9 +223,6 @@ class DatabaseStorage(BaseStorage):
             if not row or row[0] is None:
                 raise FileNotFoundError(f"File not found in database storage: {key}")
             return bytes(row[0])
-
-    def open_stream(self, key: str):
-        return DatabaseStream(key)
 
     def delete(self, key: str) -> None:
         with SessionLocal() as db:

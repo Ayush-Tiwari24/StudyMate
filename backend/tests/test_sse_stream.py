@@ -9,7 +9,7 @@ Verifies:
 """
 
 from unittest.mock import MagicMock
-from app.services.generation.rag_chain import ReasoningFilter, clean_rewritten_query
+from app.services.generation.rag_chain import ReasoningFilter, CitationFilter, clean_rewritten_query
 
 
 def test_reasoning_filter_simple_block():
@@ -50,3 +50,36 @@ Optimized Search Query: "What is the difference between Prim's and Kruskal's alg
 def test_clean_rewritten_query_plain():
     clean = clean_rewritten_query("How does binary search work?")
     assert clean == "How does binary search work?"
+
+
+def test_citation_filter_simple_markers():
+    cfilter = CitationFilter()
+    text = "The time complexity is O(V^2) [1] and space is O(V) [2, 3]."
+    out = cfilter.process(text) + cfilter.flush()
+    assert "[1]" not in out
+    assert "[2, 3]" not in out
+    assert out == "The time complexity is O(V^2)  and space is O(V) ."
+
+
+def test_citation_filter_split_across_tokens():
+    cfilter = CitationFilter()
+    parts = ["This fact is proven in ", "[", "4", "]", " and verified."]
+    result = "".join([cfilter.process(p) for p in parts]) + cfilter.flush()
+    assert "[4]" not in result
+    assert result == "This fact is proven in  and verified."
+
+
+def test_citation_filter_multidigit_split():
+    cfilter = CitationFilter()
+    parts = ["Analysis shows ", "[1", ", 2", "5] holds."]
+    result = "".join([cfilter.process(p) for p in parts]) + cfilter.flush()
+    assert "[1, 25]" not in result
+    assert result == "Analysis shows  holds."
+
+
+def test_citation_filter_preserves_non_citations():
+    cfilter = CitationFilter()
+    parts = ["See [markdown link](https://example.com) and task [x] done."]
+    result = "".join([cfilter.process(p) for p in parts]) + cfilter.flush()
+    assert "[markdown link]" in result
+    assert "[x]" in result

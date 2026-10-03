@@ -23,7 +23,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.chat import Chat
 from app.models.document import Document
-from app.models.message import Message, MessageSource
+from app.models.message import Message
 from app.schemas.chat import (
     ChatCreateRequest,
     ChatUpdateRequest,
@@ -32,7 +32,6 @@ from app.schemas.chat import (
     ChatDetailResponse,
     ChatListResponse,
     MessageResponse,
-    SourceResponse,
 )
 from app.core.logger import logger
 
@@ -122,12 +121,11 @@ def get_chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a chat with all its messages and sources."""
+    """Get a chat with all its messages."""
     chat = (
         db.query(Chat)
         .options(
             selectinload(Chat.documents),
-            selectinload(Chat.messages).selectinload(Message.sources),
             selectinload(Chat.messages).selectinload(Message.feedback),
         )
         .filter(Chat.id == chat_id, Chat.user_id == current_user.id)
@@ -136,44 +134,18 @@ def get_chat(
     if not chat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found.")
 
-    # Batch document filenames in memory to avoid N+1 queries per source
-    doc_filenames = {d.id: d.filename for d in chat.documents}
-    missing_doc_ids = {
-        s.document_id
-        for msg in chat.messages
-        for s in msg.sources
-        if s.document_id and s.document_id not in doc_filenames
-    }
-    if missing_doc_ids:
-        extra_docs = db.query(Document.id, Document.filename).filter(Document.id.in_(missing_doc_ids)).all()
-        for did, fname in extra_docs:
-            doc_filenames[did] = fname
-
-    messages = []
-    for msg in chat.messages:
-        sources = [
-            SourceResponse(
-                id=s.id,
-                file=doc_filenames.get(s.document_id, "source removed"),
-                document_id=s.document_id,
-                page=s.page,
-                score=s.score,
-                snippet=s.snippet,
-            )
-            for s in msg.sources
-        ]
-        messages.append(
-            MessageResponse(
-                id=msg.id,
-                role=msg.role,
-                content=msg.content,
-                model_used=msg.model_used,
-                latency_ms=msg.latency_ms,
-                sources=sources,
-                feedback_value=msg.feedback.value if msg.feedback else None,
-                created_at=msg.created_at,
-            )
+    messages = [
+        MessageResponse(
+            id=msg.id,
+            role=msg.role,
+            content=msg.content,
+            model_used=msg.model_used,
+            latency_ms=msg.latency_ms,
+            feedback_value=msg.feedback.value if msg.feedback else None,
+            created_at=msg.created_at,
         )
+        for msg in chat.messages
+    ]
 
     return ChatDetailResponse(
         id=chat.id,
@@ -252,7 +224,6 @@ async def ask_question(
     # Stream the response via SSE (zero DB connections held during streaming)
     async def event_stream() -> AsyncGenerator[str, None]:
         full_answer = ""
-        sources_data = []
 
         # Send initial keep-alive comment so proxy buffers are flushed immediately
         yield ": ready\n\n"
@@ -286,10 +257,6 @@ async def ask_question(
                     full_answer += event["text"]
                     yield f"event: token\ndata: {json.dumps({'text': event['text']})}\n\n"
                     last_ping_time = now
-                elif event["type"] == "sources":
-                    sources_data = event["sources"]
-                    yield f"event: sources\ndata: {json.dumps({'sources': sources_data})}\n\n"
-                    last_ping_time = now
 
         except Exception as e:
             logger.error(f"RAG query error: {e}")
@@ -309,7 +276,7 @@ async def ask_question(
         else:
             model_name = app_settings.ollama_model
 
-        # 2. Short final transaction: save assistant message and all sources in ONE commit
+        # 2. Short final transaction: save assistant message
         with timer.measure("save"):
             save_db = SessionLocal()
             try:
@@ -321,17 +288,6 @@ async def ask_question(
                     latency_ms=int(timer.timings.get("total_ms", 0)),
                 )
                 save_db.add(assistant_msg)
-                save_db.flush()
-
-                for src in sources_data:
-                    source = MessageSource(
-                        message_id=assistant_msg.id,
-                        document_id=src.get("document_id"),
-                        page=src.get("page"),
-                        score=src.get("score"),
-                        snippet=src.get("snippet"),
-                    )
-                    save_db.add(source)
                 save_db.commit()
                 saved_msg_id = assistant_msg.id
             finally:
@@ -425,12 +381,11 @@ def export_chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Export a chat conversation as markdown."""
+    """Export a chat conversation as plain markdown."""
     chat = (
         db.query(Chat)
         .options(
-            selectinload(Chat.documents),
-            selectinload(Chat.messages).selectinload(Message.sources),
+            selectinload(Chat.messages),
         )
         .filter(Chat.id == chat_id, Chat.user_id == current_user.id)
         .first()
@@ -438,28 +393,11 @@ def export_chat(
     if not chat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found.")
 
-    doc_filenames = {d.id: d.filename for d in chat.documents}
-    missing_doc_ids = {
-        s.document_id
-        for msg in chat.messages
-        for s in msg.sources
-        if s.document_id and s.document_id not in doc_filenames
-    }
-    if missing_doc_ids:
-        extra_docs = db.query(Document.id, Document.filename).filter(Document.id.in_(missing_doc_ids)).all()
-        for did, fname in extra_docs:
-            doc_filenames[did] = fname
-
-    # Build markdown export
+    # Build markdown export with plain questions and answers only
     lines = [f"# {chat.title}\n"]
     for msg in chat.messages:
         role_label = "**You:**" if msg.role == "user" else "**Assistant:**"
         lines.append(f"\n{role_label}\n{msg.content}\n")
-        if msg.sources:
-            lines.append("\n*Sources:*")
-            for s in msg.sources:
-                fname = doc_filenames.get(s.document_id, "source removed")
-                lines.append(f"- {fname}, p.{s.page}: {s.snippet[:100] if s.snippet else ''}...")
 
     content = "\n".join(lines)
 
@@ -469,10 +407,3 @@ def export_chat(
         headers={"Content-Disposition": f'attachment; filename="{chat.title}.md"'},
     )
 
-
-def _get_doc_filename(db: Session, document_id: int | None) -> str:
-    """Helper to get a document's filename or 'source removed'."""
-    if document_id is None:
-        return "source removed"
-    doc = db.query(Document).filter(Document.id == document_id).first()
-    return doc.filename if doc else "source removed"

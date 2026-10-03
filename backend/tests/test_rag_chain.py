@@ -9,18 +9,21 @@ import pytest
 from app.services.generation.prompts import build_answer_prompt, build_rewrite_prompt
 
 
-def test_answer_prompt_has_citations():
-    """Answer prompt should include numbered context."""
+def test_answer_prompt_context_structure():
+    """Answer prompt should include numbered context blocks without filenames or page numbers."""
     chunks = [
         {"content": "Normalization reduces redundancy.", "metadata": {"filename": "dbms.pdf", "page": 14}},
         {"content": "1NF requires atomic values.", "metadata": {"filename": "dbms.pdf", "page": 15}},
     ]
     prompt = build_answer_prompt(chunks, "What is normalization?")
 
-    assert "[1]" in prompt
-    assert "[2]" in prompt
-    assert "dbms.pdf" in prompt
-    assert "p.14" in prompt
+    assert "Context block 1:" in prompt
+    assert "Context block 2:" in prompt
+    assert "Normalization reduces redundancy." in prompt
+    assert "1NF requires atomic values." in prompt
+    assert "dbms.pdf" not in prompt
+    assert "p.14" not in prompt
+    assert "DO NOT include any citation markers" in prompt
     assert "What is normalization?" in prompt
 
 

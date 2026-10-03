@@ -4,7 +4,6 @@ StudyMate RAG — Document Routes
 POST   /api/documents/upload       — Upload a PDF
 GET    /api/documents              — List user's documents
 GET    /api/documents/{id}/status  — Processing status
-GET    /api/documents/{id}/file    — Download original PDF
 DELETE /api/documents/{id}         — Delete PDF + vectors + chunks
 """
 
@@ -221,48 +220,6 @@ def get_document_status(
         error_message=doc.error_message,
     )
 
-
-@router.get("/{document_id}/file")
-def download_document(
-    document_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Download / view the original PDF file."""
-    doc = (
-        db.query(Document)
-        .filter(Document.id == document_id, Document.user_id == current_user.id)
-        .first()
-    )
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
-
-    from app.services.storage import get_storage
-    from fastapi.responses import StreamingResponse
-    import io
-
-    storage = get_storage()
-    if not storage.exists(doc.file_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage.")
-
-    if hasattr(storage, "open_stream"):
-        stream = storage.open_stream(doc.file_path)
-    else:
-        stream = io.BytesIO(storage.open(doc.file_path))
-
-    headers = {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": f'inline; filename="{doc.filename}"',
-        "Accept-Ranges": "bytes",
-    }
-    if doc.size_bytes and doc.size_bytes > 0:
-        headers["Content-Length"] = str(doc.size_bytes)
-
-    return StreamingResponse(
-        stream,
-        media_type="application/pdf",
-        headers=headers,
-    )
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_200_OK)
